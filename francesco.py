@@ -89,4 +89,4 @@ c = full_circ(game, params)
 drawer = qml.draw(full_circ)
 #TODO drawing fails...what am I missing?
 print('yo')
-print(drawer(params))
+print(drawer(game, params))
