@@ -1,5 +1,7 @@
 import pennylane as qml
 from pennylane import numpy as np
+from tictactoe import *
+
 
 ttt_dev = qml.device("default.qubit", wires=9) # the device used to label ttt instances
 
@@ -39,8 +41,6 @@ def column_layer(params):
 
 
 
-
-
 @qml.qnode(ttt_dev)
 def full_circ(game, params):
         '''
@@ -73,11 +73,11 @@ def full_circ(game, params):
 ###################################################
 
 
-game = np.array([[-1, 1, 1], [0, -1, 1], [-1, 0, -1]]) # just a random game
+game = np.array([[-1, 1, 1], [0, -1, 1], [-1, 0, -1]], requires_grad = False) # just a random game
 
 
 rng = np.random.default_rng(2021)
-params = rng.uniform(low=-1, high=1, size=(5,2,6)) # random set of starting params
+params = np.array(rng.uniform(low=-1, high=1, size=(5,2,6)), requires_grad = True) # random set of starting params
 
 #print(params)
 #print([params])
@@ -93,7 +93,8 @@ params = rng.uniform(low=-1, high=1, size=(5,2,6)) # random set of starting para
 
 ############################
 
-
+def cost_function(params,game):
+    return (full_circ(game,params)-get_label(params))**2
 
 steps = 200
 init_params = params
@@ -103,5 +104,8 @@ opt = qml.GradientDescentOptimizer(0.01)
 
 theta = init_params
 for _ in range(steps):
-    theta = opt.step(full_circ(game, theta))
-    gd_cost.append(full_circ(game,theta))
+    theta = opt.step(cost_function,theta,game)
+    print("parameters {}  current cost value: {}".format(theta, cost_function(theta, game) ))
+    gd_cost.append((full_circ(game,theta)-get_label(game))**2)
+
+print(gd_cost)

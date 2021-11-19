@@ -1,4 +1,4 @@
-import numpy as np
+from pennylane import numpy as np
 import itertools
 import matplotlib.pyplot as plt
 
