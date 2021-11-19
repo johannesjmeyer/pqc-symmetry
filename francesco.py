@@ -1,7 +1,8 @@
+# %%
 import pennylane as qml
 from pennylane import numpy as np
 from tictactoe import *
-
+import random
 
 ttt_dev = qml.device("default.qubit", wires=9) # the device used to label ttt instances
 
@@ -94,6 +95,7 @@ params = np.array(rng.uniform(low=-1, high=1, size=(5,2,6)), requires_grad = Tru
 
 ############################
 
+# %%
 def cost_function(params,game):
     return (full_circ(game,params)-get_label(game))**2
 
@@ -103,6 +105,21 @@ def cost_function_batch(params,games_batch):
     '''
     return sum([(full_circ(g,params)-get_label(g))**2 for g in games_batch])/np.shape(games_batch)[0]
 
+def gen_games_sample(size):
+    '''
+    Generates Tensor with 3*size games that are won equally by X, O and 0
+    '''
+    games_data,labels = get_data()
+
+    sample = []
+    sample_label = []
+    for i in range(size):
+        for j in [1, 0, -1]:
+            sample.append(random.choice([a for k, a in enumerate(games_data) if labels[k] == j]))
+            sample_label.append(j)
+
+    return np.tensor(sample), np.tensor(sample_label)
+
 steps = 200
 init_params = params
 
@@ -111,17 +128,32 @@ opt = qml.GradientDescentOptimizer(0.01)
 
 theta = init_params
 
-games_data,labels = get_data()
-
-size = 10
+# Create random samples with equal amount of wins for X, O and 0
+size = 3
+games_sample, label_sample = gen_games_sample(3)
 
 for j in range(steps):
-    theta = opt.step(lambda x: cost_function_batch(x, games_data[:size]),theta)
-    print(f"step {j} current cost value: {cost_function_batch(theta,games_data[:size])}")
-    gd_cost.append(cost_function_batch(theta, games_data[:size]))
+    theta = opt.step(lambda x: cost_function_batch(x, games_sample),theta)
+    print(f"step {j} current cost value: {cost_function_batch(theta,games_sample)}")
+    gd_cost.append(cost_function_batch(theta, games_sample))
 
 print(gd_cost)
+# %%
+
+# Check what results correspond to which label
+games_check, labels_check = gen_games_sample(20)
+results = {-1: {}, 0: {}, 1: {}}
+for i, game in enumerate(games_check[:500]):
+    res_device = round(float(full_circ(game, theta)), 3)
+    res_true = int(labels_check[i])
+    if res_device in results[res_true]:
+        results[res_true][res_device] += 1
+    else:
+        results[res_true][res_device] = 0
+
+print(results)
 
 
 # TODO: accuracy test?
 # TODO: enforce symmetries?
+# %%
