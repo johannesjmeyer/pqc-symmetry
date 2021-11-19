@@ -51,11 +51,8 @@ def full_circ(game, params):
 
         ngame = np.pi*0.5*game # normalize entries of game so they are between -pi/2, pi/2
 
-        print('hey $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
-
-
         for r in range(params.shape[0]): # for each of the r repetitions interleave data_enc with row and colum n layers
-            print('r {}'.format(r))
+            #print('r {}'.format(r))
             data_encoding(ngame) 
             #drawer = qml.draw(data_encoding)
             #print(drawer(ngame))
@@ -67,7 +64,7 @@ def full_circ(game, params):
             data_encoding(ngame)
             column_layer(params[r,1])
 
-        return qml.expval(qml.PauliZ(3)) # measure everything in comp basis
+        return qml.expval(qml.PauliZ(1)) # measure one qubit in comp basis
 
 
 
@@ -78,15 +75,33 @@ def full_circ(game, params):
 
 game = np.array([[-1, 1, 1], [0, -1, 1], [-1, 0, -1]]) # just a random game
 
-params = np.random.uniform(low=-1, high=1, size=(5,2,6)) # random set of starting params
 
+rng = np.random.default_rng(2021)
+params = rng.uniform(low=-1, high=1, size=(5,2,6)) # random set of starting params
+
+#print(params)
 #print([params])
 
 
 
-c = full_circ(game, params)
+#c = full_circ(game, params)
 
-drawer = qml.draw(full_circ)
-#TODO drawing fails...what am I missing?
-print('yo')
-print(drawer(game, params))
+#drawer = qml.draw(full_circ)
+#print(drawer(game, params))
+
+#TODO train something on a few labelled data!
+
+############################
+
+
+
+steps = 200
+init_params = params
+
+gd_cost = []
+opt = qml.GradientDescentOptimizer(0.01)
+
+theta = init_params
+for _ in range(steps):
+    theta = opt.step(full_circ(game, theta))
+    gd_cost.append(full_circ(game,theta))
