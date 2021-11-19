@@ -94,7 +94,7 @@ params = np.array(rng.uniform(low=-1, high=1, size=(5,2,6)), requires_grad = Tru
 ############################
 
 def cost_function(params,game):
-    return (full_circ(game,params)-get_label(params))**2
+    return (full_circ(game,params)-get_label(game))**2
 
 steps = 200
 init_params = params
@@ -103,9 +103,13 @@ gd_cost = []
 opt = qml.GradientDescentOptimizer(0.01)
 
 theta = init_params
-for _ in range(steps):
-    theta = opt.step(cost_function,theta,game)
-    print("parameters {}  current cost value: {}".format(theta, cost_function(theta, game) ))
-    gd_cost.append((full_circ(game,theta)-get_label(game))**2)
+
+
+print('here goes  ', cost_function(theta, game),'\n\n')
+
+for j in range(steps):
+    theta = opt.step(lambda x: cost_function(x, game),theta)
+    print(f"step {j} current cost value: {cost_function(theta,game)}")
+    gd_cost.append(cost_function(theta, game))
 
 print(gd_cost)
