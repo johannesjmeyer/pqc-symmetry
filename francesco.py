@@ -68,6 +68,7 @@ def full_circ(game, params):
 
 
 
+
 ###################################################
 ###################################################
 ###################################################
@@ -96,6 +97,12 @@ params = np.array(rng.uniform(low=-1, high=1, size=(5,2,6)), requires_grad = Tru
 def cost_function(params,game):
     return (full_circ(game,params)-get_label(game))**2
 
+def cost_function_batch(params,games_batch):
+    '''
+    normalized least squares cost function over batch of data points (games)
+    '''
+    return sum([(full_circ(g,params)-get_label(g))**2 for g in games_batch])/np.shape(games_batch)[0]
+
 steps = 200
 init_params = params
 
@@ -104,12 +111,17 @@ opt = qml.GradientDescentOptimizer(0.01)
 
 theta = init_params
 
+games_data,labels = get_data()
 
-print('here goes  ', cost_function(theta, game),'\n\n')
+size = 10
 
 for j in range(steps):
-    theta = opt.step(lambda x: cost_function(x, game),theta)
-    print(f"step {j} current cost value: {cost_function(theta,game)}")
-    gd_cost.append(cost_function(theta, game))
+    theta = opt.step(lambda x: cost_function_batch(x, games_data[:size]),theta)
+    print(f"step {j} current cost value: {cost_function_batch(theta,games_data[:size])}")
+    gd_cost.append(cost_function_batch(theta, games_data[:size]))
 
 print(gd_cost)
+
+
+# TODO: accuracy test?
+# TODO: enforce symmetries?
