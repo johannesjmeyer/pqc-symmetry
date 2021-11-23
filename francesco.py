@@ -105,7 +105,7 @@ def cost_function_batch(params,games_batch):
     '''
     return sum([(full_circ(g,params)-get_label(g))**2 for g in games_batch])/np.shape(games_batch)[0]
 
-def gen_games_sample(size):
+def gen_games_sample(size, wins=[1, 0, -1]):
     '''
     Generates Tensor with 3*size games that are won equally by X, O and 0
     '''
@@ -113,10 +113,10 @@ def gen_games_sample(size):
 
     sample = []
     sample_label = []
-    for i in range(size):
-        for j in [1, 0, -1]:
-            sample.append(random.choice([a for k, a in enumerate(games_data) if labels[k] == j]))
-            sample_label.append(j)
+    
+    for j in wins:
+        sample += random.sample([a for k, a in enumerate(games_data) if labels[k] == j], size)
+        sample_label += size*[j]
 
     return np.tensor(sample), np.tensor(sample_label)
 
@@ -129,7 +129,6 @@ opt = qml.GradientDescentOptimizer(0.01)
 theta = init_params
 
 # Create random samples with equal amount of wins for X, O and 0
-size = 3
 games_sample, label_sample = gen_games_sample(3)
 
 for j in range(steps):
@@ -149,7 +148,7 @@ for i, game in enumerate(games_check[:500]):
     if res_device in results[res_true]:
         results[res_true][res_device] += 1
     else:
-        results[res_true][res_device] = 0
+        results[res_true][res_device] = 1
 
 print(results)
 
