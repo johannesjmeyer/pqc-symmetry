@@ -113,6 +113,17 @@ def diag_layer(param, symm=True):
             qml.CRZ(param[n], wires=[8, i])       
 
 ### Non symmetric functions ###
+def data_encoding_old(game):
+    '''
+    loops through game array, applies RX(game[i]) on wire i
+    input: 9x9 np array representation of ttt game
+    output: None?
+    '''
+    fgame = game.flatten()
+    for j in range(len(fgame)):
+        qml.RX(fgame[j], wires=j)
+
+
 def row_layer(params):
     '''
     entangles nearest neighbours qubits on each ROW of the game through CZs depending on params
