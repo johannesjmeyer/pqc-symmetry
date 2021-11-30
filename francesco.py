@@ -10,9 +10,8 @@ ttt_dev = qml.device("default.qubit", wires=9) # the device used to label ttt in
 ###################################################
 ###################################################
 
-
-
-def data_encoding_sym(game):
+# %%
+def data_encoding(game):
     '''
     loops through game array, applies RX(game[i]) on wire i
     input: 9x9 np array representation of ttt game
@@ -30,25 +29,35 @@ def data_encoding_sym(game):
 
 
 ### Symmetric functions ###
-def corners(param):
+def corners(param, symm=True):
 
     qubits = [0, 2, 4, 6]
 
-    for i in qubits:
-        qml.RX(param, wires=i)
+    if symm:
+        for i in qubits:
+            qml.RX(param, wires=i)
 
-def edges(param):
+    else:
+        for n, i in enumerate(qubits):
+            qml.RX(param[n], wires=i)
+    
+def edges(param, symm=True):
 
     qubits = [1, 3, 5, 7]
 
-    for i in qubits:
-        qml.RX(param, wires=i)
+    if symm:
+        for i in qubits:
+            qml.RX(param, wires=i)
 
+    else:
+        for n, i in enumerate(qubits):
+            qml.RX(param[n], wires=i)
+    
 def center(param):
     
     qml.RX(param, wires=8)
 
-def outer_layer(param):
+def outer_layer(param, symm=True):
     '''
     0  - 1 -  2
     |         |
@@ -59,11 +68,15 @@ def outer_layer(param):
 
     connections = list(range(8)) + [0] 
 
-    for i in range(8):
-        qml.CRZ(param, wires=[connections[i], connections[i+1]])
+    if symm:
+        for i in range(8):
+            qml.CRZ(param, wires=[connections[i], connections[i+1]])
 
+    else:
+        for i in range(8):
+            qml.CRZ(param[i], wires=[connections[i], connections[i+1]])
 
-def inner_layer(param):
+def inner_layer(param, symm=True):
     '''
     0    1    2
          |
@@ -73,10 +86,15 @@ def inner_layer(param):
     '''
     connections = [1, 3, 5, 7]
 
-    for i in connections:
-        qml.CRZ(param, wires=[4, i])
+    if symm:
+        for i in connections:
+            qml.CRZ(param, wires=[4, i])
 
-def diag_layer(param):
+    else:
+        for n, i in enumerate(connections):
+            qml.CRZ(param[n], wires=[4, i])    
+  
+def diag_layer(param, symm=True):
     '''
     0    1    2 
       \     /
@@ -86,8 +104,13 @@ def diag_layer(param):
     '''
     connections = [0, 2, 4, 6]
 
-    for i in connections:
-        qml.CRZ(param, wires=[8, i])
+    if symm:
+        for i in connections:
+            qml.CRZ(param, wires=[8, i])
+
+    else:
+        for n, i in enumerate(connections):
+            qml.CRZ(param[n], wires=[8, i])       
 
 ### Non symmetric functions ###
 def row_layer(params):
@@ -125,35 +148,52 @@ def full_circ(game, params):
             #print('r {}'.format(r))
 
             if symmetric:
-                data_encoding_sym(ngame)
+                data_encoding(ngame)
                 outer_layer(params[r, 0, 0]) 
 
-                data_encoding_sym(ngame)
+                data_encoding(ngame)
                 inner_layer(params[r, 0, 1]) 
 
-                data_encoding_sym(ngame)
+                data_encoding(ngame)
                 diag_layer(params[r, 0, 2]) 
 
 
-                data_encoding_sym(ngame)
+                data_encoding(ngame)
                 edges(params[r, 1, 0])
 
-                data_encoding_sym(ngame)
+                data_encoding(ngame)
                 corners(params[r, 1, 1])
 
-                data_encoding_sym(ngame)
+                data_encoding(ngame)
                 center(params[r, 1, 2])
-            #drawer = qml.draw(data_encoding)
+
+            else: 
+                data_encoding(ngame)
+                outer_layer(params[r, 0:8], False) 
+
+                data_encoding(ngame)
+                inner_layer(params[r, 8:12], False) 
+
+                data_encoding(ngame)
+                diag_layer(params[r, 12:16], False) 
 
 
+                data_encoding(ngame)
+                edges(params[r, 16:20], False)
+
+                data_encoding(ngame)
+                corners(params[r, 20:24], False)
+
+                data_encoding(ngame)
+                center(params[r, 24])
+
+            ### old stuff ###
+            #drawer = qml.d
+            # raw(data_encoding)
             #print(drawer(ngame))
-
-            
             #row_layer(params[r,0])
             #drawer = qml.draw(row_layer)
             #print(drawer(params[r,0]))
-
-            
             #column_layer(params[r,1])
 
         return qml.expval(qml.PauliZ(8)) # measure one qubit in comp basis
@@ -169,15 +209,16 @@ def full_circ(game, params):
 #game = np.array([[-1, 1, 1], [0, -1, 1], [-1, 0, -1]], requires_grad = False) # just a random game
 
 
-symmetric = True
+symmetric = False
 
 
 rng = np.random.default_rng(2021)
 repetitions = 5
+
 if symmetric:
     params = np.array(rng.uniform(low=-1, high=1, size=(repetitions,2,3)), requires_grad = True)  # random set of starting params
 else:
-    pass
+    params = np.array(rng.uniform(low=-1, high=1, size=(repetitions,8+4+4+4+4+1)), requires_grad = True)
 
 #print(params)
 #print([params])
@@ -195,7 +236,10 @@ else:
 
 # %%
 def random_params():
-    return np.array(rng.uniform(low=-1, high=1, size=(repetitions,2,3)), requires_grad = True)
+    if symmetric:
+        return np.array(rng.uniform(low=-1, high=1, size=(repetitions,2,3)), requires_grad = True)
+    else:
+        return np.array(rng.uniform(low=-1, high=1, size=(repetitions,8+4+4+4+4+1)), requires_grad = True)
 
 def cost_function(params,game):
     return (full_circ(game,params)-get_label(game))**2
@@ -221,14 +265,14 @@ def gen_games_sample(size, wins=[1, 0, -1]):
 
     return np.tensor(sample), np.tensor(sample_label)
 
-steps = 2000
+steps = 200
 
 # Create random samples with equal amount of wins for X, O and 0
 size = 5
 games_sample, label_sample = gen_games_sample(size, wins=[-1, 0, 1])
 
 # Find best starting paramters
-params_list = [random_params() for i in range(20)]
+params_list = [random_params() for i in range(5)]
 cost_list = [cost_function_batch(k,games_sample) for k in params_list]
 init_params = params_list[np.argmin(cost_list)]
 
