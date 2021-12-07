@@ -10,7 +10,6 @@ ttt_dev = qml.device("default.qubit", wires=9) # the device used to label ttt in
 ###################################################
 ###################################################
 
-# %%
 def data_encoding(game):
     '''
     loops through game array, applies RX(game[i]) on wire i
@@ -146,7 +145,7 @@ def column_layer(params):
 
 
 @qml.qnode(ttt_dev)
-def full_circ(game, params):
+def full_circ(game, params, symmetric):
         '''
         prepares the all zero comp basis state then iterates through encoding and layers
         input: params, np array of shape r x 2 x 6 
@@ -220,17 +219,9 @@ def full_circ(game, params):
 #game = np.array([[-1, 1, 1], [0, -1, 1], [-1, 0, -1]], requires_grad = False) # just a random game
 
 
-symmetric = False
 
 
 rng = np.random.default_rng(2021)
-repetitions = 5
-
-if symmetric:
-    params = np.array(rng.uniform(low=-1, high=1, size=(repetitions,2,3)), requires_grad = True)  # random set of starting params
-else:
-    params = np.array(rng.uniform(low=-1, high=1, size=(repetitions,8+4+4+4+4+1)), requires_grad = True)
-
 #print(params)
 #print([params])
 
@@ -245,21 +236,20 @@ else:
 
 ############################
 
-# %%
-def random_params():
+def random_params(repetitions, symmetric):
     if symmetric:
         return np.array(rng.uniform(low=-1, high=1, size=(repetitions,2,3)), requires_grad = True)
     else:
         return np.array(rng.uniform(low=-1, high=1, size=(repetitions,8+4+4+4+4+1)), requires_grad = True)
 
-def cost_function(params,game):
-    return (full_circ(game,params)-get_label(game))**2
+def cost_function(params,game, symmetric):
+    return (full_circ(game,params, symmetric)-get_label(game))**2
 
-def cost_function_batch(params,games_batch):
+def cost_function_batch(params,games_batch, symmetric):
     '''
     normalized least squares cost function over batch of data points (games)
     '''
-    return sum([(full_circ(g,params)-get_label(g))**2 for g in games_batch])/np.shape(games_batch)[0]
+    return sum([(full_circ(g,params, symmetric)-get_label(g))**2 for g in games_batch])/np.shape(games_batch)[0]
 
 def gen_games_sample(size, wins=[1, 0, -1]):
     '''
@@ -276,57 +266,69 @@ def gen_games_sample(size, wins=[1, 0, -1]):
 
     return np.tensor(sample), np.tensor(sample_label)
 
-steps = 200
+class tictactoeML():
 
-# Create random samples with equal amount of wins for X, O and 0
-size = 5
-games_sample, label_sample = gen_games_sample(size, wins=[-1, 0, 1])
+    def __init__(self, symmetric=True, sample_size=5):
+        self.opt = qml.GradientDescentOptimizer(0.01)
+        self.sample_games(sample_size)
+        self.symmetric = symmetric
 
-# Find best starting paramters
-params_list = [random_params() for i in range(5)]
-cost_list = [cost_function_batch(k,games_sample) for k in params_list]
-init_params = params_list[np.argmin(cost_list)]
+    def random_parameters(self, size=1, repetitions=5):
+        if size==1:
+            self.init_params = random_params(repetitions, self.symmetric)
+        else:
+            # Find best starting paramters
+            params_list = [random_params(repetitions, self.symmetric) for i in range(size)]
+            cost_list = [cost_function_batch(k,self.games_sample, self.symmetric) for k in params_list]
+            self.init_params = params_list[np.argmin(cost_list)]
 
-gd_cost = []
-opt = qml.GradientDescentOptimizer(0.01)
-#opt = qml.QNGOptimizer(0.01)
-theta = init_params
+    def sample_games(self, size):
+        # Create random samples with equal amount of wins for X, O and 0
+        self.games_sample, self.label_sample = gen_games_sample(size, wins=[-1, 0, 1])
+
+    def run(self, steps, resume = False):
+        if not resume:
+            self.gd_cost = []
+            self.theta = self.init_params
+        for j in range(steps):
+            self.theta = self.opt.step(lambda x: cost_function_batch(x, self.games_sample, self.symmetric),self.theta)
+            cost_temp = cost_function_batch(self.theta,self.games_sample, self.symmetric)
+            print(f"step {j} current cost value: {cost_temp}")
+            self.gd_cost.append(cost_temp)   
+            self.steps = j     
+
+        print(self.gd_cost)
+        print(self.theta)
+    
+    def check_accuracy(self, check_size = 100):
+        # Check what results correspond to which label
+        games_check, labels_check = gen_games_sample(check_size)
+        results = {-1: {}, 0: {}, 1: {}}
+        results_alt = {-1: [], 0: [], 1: []}
+        for i, game in enumerate(games_check[:500]):
+            res_device = round(float(full_circ(game, self.theta, self.symmetric)), 3)
+            res_true = int(labels_check[i])
+            results_alt[res_true].append(res_device)
+            if res_device in results[res_true]:
+                results[res_true][res_device] += 1
+            else:
+                results[res_true][res_device] = 1
+
+        self.results = results
+
+        # check accuracy
+        self.accuracy = {-1: {}, 0: {}, 1: {}}
+
+        self.accuracy[-1] = len([j for j in results_alt[-1] if (j <= -(1/3))])/len(results_alt[-1])
+        self.accuracy[0] = len([j for j in results_alt[0] if ((j > -(1/3)) and (j < 1/3))])/len(results_alt[0])
+        self.accuracy[1] = len([j for j in results_alt[1] if (j >= (1/3))])/len(results_alt[1])
+        print('Accuracy for random sample of {} games: \n\n \t\t -1: {}% \n \t\t  0: {}% \n \t\t  1: {}%'.format(check_size*3, self.accuracy[-1]*100, self.accuracy[0]*100, self.accuracy[1]*100))
+
+    def plot_cost(self):
+        plt.plot(self.gd_cost)
+        plt.show()
 
 
-for j in range(steps):
-    theta = opt.step(lambda x: cost_function_batch(x, games_sample),theta)
-    cost_temp = cost_function_batch(theta,games_sample)
-    print(f"step {j} current cost value: {cost_temp}")
-    gd_cost.append(cost_temp)
-
-print(gd_cost)
-print(theta)
-# %%
-
-# Check what results correspond to which label
-check_size = 100
-games_check, labels_check = gen_games_sample(check_size)
-results = {-1: {}, 0: {}, 1: {}}
-results_alt = {-1: [], 0: [], 1: []}
-for i, game in enumerate(games_check[:500]):
-    res_device = round(float(full_circ(game, theta)), 3)
-    res_true = int(labels_check[i])
-    results_alt[res_true].append(res_device)
-    if res_device in results[res_true]:
-        results[res_true][res_device] += 1
-    else:
-        results[res_true][res_device] = 1
-
-# check accuracy
-accuracy = {-1: {}, 0: {}, 1: {}}
-
-accuracy[-1] = len([j for j in results_alt[-1] if (j <= -(1/3))])/len(results_alt[-1])
-accuracy[0] = len([j for j in results_alt[0] if ((j > -(1/3)) and (j < 1/3))])/len(results_alt[0])
-accuracy[1] = len([j for j in results_alt[1] if (j >= (1/3))])/len(results_alt[1])
-print('Accuracy for random sample of {} games: \n\n \t\t -1: {}% \n \t\t  0: {}% \n \t\t  1: {}%'.format(check_size*3, accuracy[-1]*100, accuracy[0]*100, accuracy[1]*100))
-
-plt.plot(gd.cost)
-plt.show()
 # TODO: accuracy test?
 # TODO: enforce symmetries?
 # %%
