@@ -3,8 +3,10 @@ import pennylane as qml
 from pennylane import numpy as np
 from tictactoe import *
 import random
+from copy import copy, deepcopy
 
 ttt_dev = qml.device("default.qubit", wires=9) # the device used to label ttt instances
+# TODO: use other device
 
 ###################################################
 ###################################################
@@ -327,6 +329,29 @@ class tictactoeML():
     def plot_cost(self):
         plt.plot(self.gd_cost)
         plt.show()
+
+# %%
+symmetric_run = tictactoeML()
+asymetric_run = deepcopy(symmetric_run)
+asymetric_run.symmetric = False
+
+symmetric_run.random_parameters(20)
+asymetric_run.random_parameters(20)
+
+symmetric_run.run(100)
+asymetric_run.run(100)
+
+symmetric_run.check_accuracy()
+asymetric_run.check_accuracy()
+
+plt.plot(symmetric_run.gd_cost, label='symmetric')
+plt.plot(asymetric_run.gd_cost, label='asymmetric')
+plt.legend()
+plt.show
+
+# TODO: implement lbfgs optimizer
+# TODO: run on cloud/cluster
+# TODO: try different circuits
 
 
 # TODO: accuracy test?
