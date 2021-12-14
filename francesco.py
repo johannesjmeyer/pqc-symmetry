@@ -6,7 +6,8 @@ import random
 from copy import copy, deepcopy
 
 ttt_dev = qml.device("default.qubit", wires=9) # the device used to label ttt instances
-# TODO: use other device
+# TODO: use other device https://pennylane.ai/plugins.html
+# TODO: implement jax https://pennylane.ai/qml/demos/tutorial_jax_transformations.html
 
 ###################################################
 ###################################################
@@ -42,6 +43,7 @@ def corners(param, symm=True):
         for n, i in enumerate(qubits):
             qml.RX(param[n], wires=i)
     
+     # TODO: add ry
 def edges(param, symm=True):
 
     qubits = [1, 3, 5, 7]
@@ -56,6 +58,7 @@ def edges(param, symm=True):
     
 def center(param):
     
+    qml.RX(param, wires=8)
     qml.RX(param, wires=8)
 
 def outer_layer(param, symm=True):
@@ -161,23 +164,31 @@ def full_circ(game, params, symmetric):
 
             if symmetric:
                 data_encoding(ngame)
-                outer_layer(params[r, 0, 0]) 
-
-                data_encoding(ngame)
-                inner_layer(params[r, 0, 1]) 
-
-                data_encoding(ngame)
-                diag_layer(params[r, 0, 2]) 
-
-
-                data_encoding(ngame)
+                corners(params[r, 1, 1])
                 edges(params[r, 1, 0])
+                outer_layer(params[r, 0, 0]) 
+                corners(params[r, 1, 1])
+                edges(params[r, 1, 0])
+                center(params[r, 1, 2])
+
 
                 data_encoding(ngame)
                 corners(params[r, 1, 1])
+                edges(params[r, 1, 0])
+                inner_layer(params[r, 0, 1])  
+                corners(params[r, 1, 1])
+                edges(params[r, 1, 0])
+                center(params[r, 1, 2])
+                
 
                 data_encoding(ngame)
+                corners(params[r, 1, 1])
+                edges(params[r, 1, 0])
+                diag_layer(params[r, 0, 1])  
+                corners(params[r, 1, 1])
+                edges(params[r, 1, 0])
                 center(params[r, 1, 2])
+    
 
             else: 
                 data_encoding(ngame)
@@ -330,6 +341,9 @@ class tictactoeML():
         plt.plot(self.gd_cost)
         plt.show()
 
+    def save_run():
+        
+
 # %%
 symmetric_run = tictactoeML()
 asymetric_run = deepcopy(symmetric_run)
@@ -349,7 +363,10 @@ plt.plot(asymetric_run.gd_cost, label='asymmetric')
 plt.legend()
 plt.show
 
-# TODO: implement lbfgs optimizer
+# TODO: imply nunmpy save or deepdish H5
+
+
+# TODO: implement lbfgs optimizer (torch)
 # TODO: run on cloud/cluster
 # TODO: try different circuits
 
