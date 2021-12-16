@@ -1,14 +1,15 @@
 # %%
 import pennylane as qml
 from pennylane import numpy as np
+from pkg_resources import require
 from tictactoe import *
 import random
 from copy import copy, deepcopy
+import torch
 
 ttt_dev = qml.device("default.qubit", wires=9) # the device used to label ttt instances
 # TODO: use other device https://pennylane.ai/plugins.html
 # TODO: implement jax https://pennylane.ai/qml/demos/tutorial_jax_transformations.html
-
 ###################################################
 ###################################################
 ###################################################
@@ -37,11 +38,14 @@ def corners(param, symm=True):
 
     if symm:
         for i in qubits:
-            qml.RX(param, wires=i)
+            qml.RX(param[0], wires=i)
+            qml.RY(param[1], wires=i)
 
     else:
         for n, i in enumerate(qubits):
-            qml.RX(param[n], wires=i)
+            qml.RX(param[i], wires=i)
+            qml.RY(param[i+1], wires=i)
+        
     
      # TODO: add ry
 def edges(param, symm=True):
@@ -50,16 +54,19 @@ def edges(param, symm=True):
 
     if symm:
         for i in qubits:
-            qml.RX(param, wires=i)
+            qml.RX(param[0], wires=i)
+            qml.RY(param[1], wires=i)
 
     else:
         for n, i in enumerate(qubits):
-            qml.RX(param[n], wires=i)
+            qml.RX(param[i-1], wires=i)
+            qml.RY(param[i], wires=i)
+    
     
 def center(param):
-    
-    qml.RX(param, wires=8)
-    qml.RX(param, wires=8)
+ 
+    qml.RX(param[0], wires=8)
+    qml.RY(param[1], wires=8)
 
 def outer_layer(param, symm=True):
     '''
@@ -149,8 +156,10 @@ def column_layer(params):
 
 
 
-@qml.qnode(ttt_dev)
-def full_circ(game, params, symmetric):
+#@qml.qnode(ttt_dev, interface='torch')
+def circuit(game, params, symmetric):
+        #params_single = params[0]
+        #params_multi = params[1]
         '''
         prepares the all zero comp basis state then iterates through encoding and layers
         input: params, np array of shape r x 2 x 6 
@@ -164,51 +173,55 @@ def full_circ(game, params, symmetric):
 
             if symmetric:
                 data_encoding(ngame)
-                corners(params[r, 1, 1])
-                edges(params[r, 1, 0])
-                outer_layer(params[r, 0, 0]) 
-                corners(params[r, 1, 1])
-                edges(params[r, 1, 0])
-                center(params[r, 1, 2])
+                corners(params[r, 0, 0])
+                edges(params[r, 0, 1])
+                outer_layer(params[r, 0, 5, 0]) 
+                corners(params[r, 0, 2])
+                edges(params[r, 0, 3])
+                center(params[r, 0, 4])
 
 
                 data_encoding(ngame)
-                corners(params[r, 1, 1])
-                edges(params[r, 1, 0])
-                inner_layer(params[r, 0, 1])  
-                corners(params[r, 1, 1])
-                edges(params[r, 1, 0])
-                center(params[r, 1, 2])
-                
+                corners(params[r, 1, 0])
+                edges(params[r, 1, 1])
+                inner_layer(params[r, 1, 5, 0]) 
+                corners(params[r, 1, 2])
+                edges(params[r, 1, 3])
+                center(params[r, 1, 4])
 
                 data_encoding(ngame)
-                corners(params[r, 1, 1])
-                edges(params[r, 1, 0])
-                diag_layer(params[r, 0, 1])  
-                corners(params[r, 1, 1])
-                edges(params[r, 1, 0])
-                center(params[r, 1, 2])
-    
+                corners(params[r, 2, 0])
+                edges(params[r, 2, 1])
+                diag_layer(params[r, 2, 5, 0]) 
+                corners(params[r, 2, 2])
+                edges(params[r, 2, 3])
+                center(params[r, 2, 4])
 
             else: 
                 data_encoding(ngame)
-                outer_layer(params[r, 0:8], False) 
+                corners(params[r, 0:8], False) 
+                edges(params[r, 8:16], False) 
+                outer_layer(params[r, 16:24], False) 
+                corners(params[r, 24:32], False) 
+                edges(params[r, 32:40], False) 
+                center(params[r, 40:42])
+
 
                 data_encoding(ngame)
-                inner_layer(params[r, 8:12], False) 
+                corners(params[r, 42:50], False) 
+                edges(params[r, 50:58], False) 
+                inner_layer(params[r, 58:62], False) 
+                corners(params[r, 62:70], False) 
+                edges(params[r, 70:78], False) 
+                center(params[r, 78:80])
 
                 data_encoding(ngame)
-                diag_layer(params[r, 12:16], False) 
-
-
-                data_encoding(ngame)
-                edges(params[r, 16:20], False)
-
-                data_encoding(ngame)
-                corners(params[r, 20:24], False)
-
-                data_encoding(ngame)
-                center(params[r, 24])
+                corners(params[r, 80:88], False) 
+                edges(params[r, 88:96], False) 
+                diag_layer(params[r, 96:100], False) 
+                corners(params[r, 100:108], False) 
+                edges(params[r, 108:116], False) 
+                center(params[r, 116:118], False) 
 
             ### old stuff ###
             #drawer = qml.d
@@ -222,6 +235,9 @@ def full_circ(game, params, symmetric):
         return qml.expval(qml.PauliZ(8)) # measure one qubit in comp basis
 
 
+
+
+full_circ_torch = qml.QNode(circuit, ttt_dev, interface='torch')
 
 
 ###################################################
@@ -249,11 +265,20 @@ rng = np.random.default_rng(2021)
 
 ############################
 
+def random_params_old(repetitions, symmetric):
+    if symmetric:
+        return torch.tensor(rng.uniform(low=-1, high=1, size=(repetitions,2,3)), requires_grad = True)
+    else:
+        return torch.tensor(rng.uniform(low=-1, high=1, size=(repetitions,8+4+4+4+4+1)), requires_grad = True)
+
 def random_params(repetitions, symmetric):
     if symmetric:
-        return np.array(rng.uniform(low=-1, high=1, size=(repetitions,2,3)), requires_grad = True)
+        #param_single = torch.tensor(rng.uniform(low=-1, high=1, size=(repetitions,3,5,2)), requires_grad = True)
+        #param_multi = torch.tensor(rng.uniform(low=-1, high=1, size=(repetitions,3)), requires_grad = True)
+        #return [param_single, param_multi]
+        return torch.tensor(rng.uniform(low=-1, high=1, size=(repetitions,3,6,2)), requires_grad = True)
     else:
-        return np.array(rng.uniform(low=-1, high=1, size=(repetitions,8+4+4+4+4+1)), requires_grad = True)
+        return torch.tensor(rng.uniform(low=-1, high=1, size=(repetitions,118)), requires_grad = True)
 
 def cost_function(params,game, symmetric):
     return (full_circ(game,params, symmetric)-get_label(game))**2
@@ -277,16 +302,16 @@ def gen_games_sample(size, wins=[1, 0, -1]):
         sample += random.sample([a for k, a in enumerate(games_data) if labels[k] == j], size)
         sample_label += size*[j]
 
-    return np.tensor(sample), np.tensor(sample_label)
+    return np.tensor(sample, requires_grad=False), np.tensor(sample_label, requires_grad=False)
 
-class tictactoeML():
+class tictactoe():
 
-    def __init__(self, symmetric=True, sample_size=5):
-        self.opt = qml.GradientDescentOptimizer(0.01)
+    def __init__(self, symmetric=True, sample_size=10):
+        #self.opt = qml.GradientDescentOptimizer(0.01)
         self.sample_games(sample_size)
         self.symmetric = symmetric
 
-    def random_parameters(self, size=1, repetitions=5):
+    def random_parameters(self, size=1, repetitions=2):
         if size==1:
             self.init_params = random_params(repetitions, self.symmetric)
         else:
@@ -303,15 +328,31 @@ class tictactoeML():
         if not resume:
             self.gd_cost = []
             self.theta = self.init_params
-        for j in range(steps):
-            self.theta = self.opt.step(lambda x: cost_function_batch(x, self.games_sample, self.symmetric),self.theta)
-            cost_temp = cost_function_batch(self.theta,self.games_sample, self.symmetric)
-            print(f"step {j} current cost value: {cost_temp}")
-            self.gd_cost.append(cost_temp)   
-            self.steps = j     
 
-        print(self.gd_cost)
-        print(self.theta)
+        self.opt = torch.optim.LBFGS([self.theta], lr=0.1)
+
+        def closure():
+            self.opt.zero_grad()
+            loss = cost_function_batch(self.theta, self.games_sample, self.symmetric)
+            loss.backward()
+            return loss
+        
+        for j in range(steps):
+            self.opt.step(closure)
+            print('step {}'.format(j))
+            #print(self.opt.param_groups[0]['params'])
+            cost_temp = cost_function_batch(self.opt.param_groups[0]['params'][0],self.games_sample, self.symmetric)
+            print(f"step {j} current cost value: {cost_temp}")
+            self.gd_cost.append(cost_temp) 
+
+        self.theta = self.opt.param_groups[0]['params'][0]
+
+        # for j in range(steps):
+        #     self.theta = self.opt.step(lambda x: cost_function_batch(x, self.games_sample, self.symmetric),self.theta)
+        #     cost_temp = cost_function_batch(self.theta,self.games_sample, self.symmetric)
+        #     print(f"step {j} current cost value: {cost_temp}")
+        #     self.gd_cost.append(cost_temp)   
+        #     self.steps = j     
     
     def check_accuracy(self, check_size = 100):
         # Check what results correspond to which label
@@ -340,10 +381,10 @@ class tictactoeML():
     def plot_cost(self):
         plt.plot(self.gd_cost)
         plt.show()
-
-    def save_run():
-        
-
+   
+test = tictactoeML(symmetric=True)
+test.random_parameters()
+test.run(5)
 # %%
 symmetric_run = tictactoeML()
 asymetric_run = deepcopy(symmetric_run)
