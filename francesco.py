@@ -1,11 +1,15 @@
 # %%
 import pennylane as qml
 from pennylane import numpy as np
-from pkg_resources import require
 from tictactoe import *
 import random
 from copy import copy, deepcopy
 import torch
+#import deepdish as dd
+#from jax.config import config
+#config.update("jax_enable_x64", True)
+#import jax
+#import jax.numpy as jnp
 
 ttt_dev = qml.device("default.qubit", wires=9) # the device used to label ttt instances
 # TODO: use other device https://pennylane.ai/plugins.html
@@ -221,7 +225,7 @@ def circuit(game, params, symmetric):
                 diag_layer(params[r, 96:100], False) 
                 corners(params[r, 100:108], False) 
                 edges(params[r, 108:116], False) 
-                center(params[r, 116:118], False) 
+                center(params[r, 116:118]) 
 
             ### old stuff ###
             #drawer = qml.d
@@ -236,10 +240,11 @@ def circuit(game, params, symmetric):
 
 
 
-
+full_circ = qml.QNode(circuit, ttt_dev)
 full_circ_torch = qml.QNode(circuit, ttt_dev, interface='torch')
+#full_circ_jax = qml.QNode(circuit, ttt_dev, interface='jax')
 
-
+#full_circ = jax.jit(full_circ_jax)
 ###################################################
 ###################################################
 ###################################################
@@ -267,11 +272,20 @@ rng = np.random.default_rng(2021)
 
 def random_params_old(repetitions, symmetric):
     if symmetric:
-        return torch.tensor(rng.uniform(low=-1, high=1, size=(repetitions,2,3)), requires_grad = True)
+        return np.array(rng.uniform(low=-1, high=1, size=(repetitions,2,3)), requires_grad = True)
     else:
-        return torch.tensor(rng.uniform(low=-1, high=1, size=(repetitions,8+4+4+4+4+1)), requires_grad = True)
+        return np.wrap_arrays(rng.uniform(low=-1, high=1, size=(repetitions,8+4+4+4+4+1)), requires_grad = True)
 
 def random_params(repetitions, symmetric):
+    if symmetric:
+        #param_single = torch.tensor(rng.uniform(low=-1, high=1, size=(repetitions,3,5,2)), requires_grad = True)
+        #param_multi = torch.tensor(rng.uniform(low=-1, high=1, size=(repetitions,3)), requires_grad = True)
+        #return [param_single, param_multi]
+        return np.array(rng.uniform(low=-1, high=1, size=(repetitions,3,6,2)), requires_grad = True)
+    else:
+        return np.array(rng.uniform(low=-1, high=1, size=(repetitions,118)), requires_grad = True)
+
+def random_params_torch(repetitions, symmetric):
     if symmetric:
         #param_single = torch.tensor(rng.uniform(low=-1, high=1, size=(repetitions,3,5,2)), requires_grad = True)
         #param_multi = torch.tensor(rng.uniform(low=-1, high=1, size=(repetitions,3)), requires_grad = True)
@@ -289,6 +303,15 @@ def cost_function_batch(params,games_batch, symmetric):
     '''
     return sum([(full_circ(g,params, symmetric)-get_label(g))**2 for g in games_batch])/np.shape(games_batch)[0]
 
+def cost_function_torch(params,game, symmetric):
+    return (full_circ_torch(game,params, symmetric)-get_label(game))**2
+
+def cost_function_batch_torch(params,games_batch, symmetric):
+    '''
+    normalized least squares cost function over batch of data points (games)
+    '''
+    return sum([(full_circ_torch(g,params, symmetric)-get_label(g))**2 for g in games_batch])/np.shape(games_batch)[0]
+
 def gen_games_sample(size, wins=[1, 0, -1]):
     '''
     Generates Tensor with 3*size games that are won equally by X, O and 0
@@ -303,20 +326,26 @@ def gen_games_sample(size, wins=[1, 0, -1]):
         sample_label += size*[j]
 
     return np.tensor(sample, requires_grad=False), np.tensor(sample_label, requires_grad=False)
-
 class tictactoe():
 
     def __init__(self, symmetric=True, sample_size=10):
         #self.opt = qml.GradientDescentOptimizer(0.01)
+        self.sample_size = sample_size
         self.sample_games(sample_size)
         self.symmetric = symmetric
 
-    def random_parameters(self, size=1, repetitions=2):
+    def random_parameters(self, size=1, repetitions=2, torch=True):
         if size==1:
-            self.init_params = random_params(repetitions, self.symmetric)
+            if torch:
+                self.init_params = random_params_torch(repetitions, self.symmetric)
+            else:
+                self.init_params = random_params(repetitions, self.symmetric)
         else:
             # Find best starting paramters
-            params_list = [random_params(repetitions, self.symmetric) for i in range(size)]
+            if torch:
+                params_list = [random_params_torch(repetitions, self.symmetric) for i in range(size)]
+            else: 
+                params_list = [random_params(repetitions, self.symmetric) for i in range(size)]
             cost_list = [cost_function_batch(k,self.games_sample, self.symmetric) for k in params_list]
             self.init_params = params_list[np.argmin(cost_list)]
 
@@ -325,6 +354,23 @@ class tictactoe():
         self.games_sample, self.label_sample = gen_games_sample(size, wins=[-1, 0, 1])
 
     def run(self, steps, resume = False):
+        self.interface = 'pennylane'
+        self.opt = qml.GradientDescentOptimizer(0.01)
+        if not resume:
+            self.gd_cost = []
+            self.theta = self.init_params
+        for j in range(steps):
+            self.theta = self.opt.step(lambda x: cost_function_batch(x, self.games_sample, self.symmetric),self.theta)
+            cost_temp = cost_function_batch(self.theta,self.games_sample, self.symmetric)
+            print(f"step {j} current cost value: {cost_temp}")
+            self.gd_cost.append(cost_temp)   
+            self.steps = j     
+
+        print(self.gd_cost)
+        print(self.theta)
+
+    def run_torch(self, steps, resume = False):
+        self.interface = 'torch'
         if not resume:
             self.gd_cost = []
             self.theta = self.init_params
@@ -333,34 +379,36 @@ class tictactoe():
 
         def closure():
             self.opt.zero_grad()
-            loss = cost_function_batch(self.theta, self.games_sample, self.symmetric)
+            loss = cost_function_batch_torch(self.theta, self.games_sample, self.symmetric)
             loss.backward()
             return loss
         
         for j in range(steps):
-            self.opt.step(closure)
-            print('step {}'.format(j))
-            #print(self.opt.param_groups[0]['params'])
-            cost_temp = cost_function_batch(self.opt.param_groups[0]['params'][0],self.games_sample, self.symmetric)
+            cost_temp = cost_function_batch_torch(self.opt.param_groups[0]['params'][0],self.games_sample, self.symmetric)
             print(f"step {j} current cost value: {cost_temp}")
+            
+            self.opt.step(closure)
+            #print('step {}'.format(j))
+            #print(self.opt.param_groups[0]['params'])
+
             self.gd_cost.append(cost_temp) 
+            self.steps = j
+        
+        cost_temp = cost_function_batch_torch(self.opt.param_groups[0]['params'][0],self.games_sample, self.symmetric)
+        print(f"final step current cost value: {cost_temp}")
 
-        self.theta = self.opt.param_groups[0]['params'][0]
-
-        # for j in range(steps):
-        #     self.theta = self.opt.step(lambda x: cost_function_batch(x, self.games_sample, self.symmetric),self.theta)
-        #     cost_temp = cost_function_batch(self.theta,self.games_sample, self.symmetric)
-        #     print(f"step {j} current cost value: {cost_temp}")
-        #     self.gd_cost.append(cost_temp)   
-        #     self.steps = j     
-    
+        self.theta = self.opt.param_groups[0]['params'][0]  
+            
     def check_accuracy(self, check_size = 100):
         # Check what results correspond to which label
         games_check, labels_check = gen_games_sample(check_size)
         results = {-1: {}, 0: {}, 1: {}}
         results_alt = {-1: [], 0: [], 1: []}
         for i, game in enumerate(games_check[:500]):
-            res_device = round(float(full_circ(game, self.theta, self.symmetric)), 3)
+            if self.interface == 'torch':
+                res_device = round(float(full_circ_torch(game, self.theta, self.symmetric)), 3)
+            else:
+                res_device = round(float(full_circ(game, self.theta, self.symmetric)), 3)
             res_true = int(labels_check[i])
             results_alt[res_true].append(res_device)
             if res_device in results[res_true]:
@@ -381,28 +429,29 @@ class tictactoe():
     def plot_cost(self):
         plt.plot(self.gd_cost)
         plt.show()
-   
-test = tictactoeML(symmetric=True)
-test.random_parameters()
-test.run(5)
+
+    def save(self, name):
+        to_save = {'symmetric': self.symmetric, 'accuracy': self.accuracy, 'steps': self.steps,  'interface': self.interface, 'cost function': self.gd_cost, 'sample size': self.sample_size, \
+        'initial parameters': self.init_params.detach().numpy(), 'sampled games': self.games_sample.numpy(), 'theta': self.theta.detach().numpy()}
+        #dd.io.save(name + '.h5', to_save)
+        np.save(name, to_save)
 # %%
-symmetric_run = tictactoeML()
-asymetric_run = deepcopy(symmetric_run)
-asymetric_run.symmetric = False
+for i in range(20):
+    symmetric_run = tictactoe()
+    asymetric_run = deepcopy(symmetric_run)
+    asymetric_run.symmetric = False
 
-symmetric_run.random_parameters(20)
-asymetric_run.random_parameters(20)
+    symmetric_run.random_parameters()
+    asymetric_run.random_parameters()
 
-symmetric_run.run(100)
-asymetric_run.run(100)
+    symmetric_run.run_torch(10)
+    asymetric_run.run_torch(10)
 
-symmetric_run.check_accuracy()
-asymetric_run.check_accuracy()
+    symmetric_run.check_accuracy()
+    asymetric_run.check_accuracy()
 
-plt.plot(symmetric_run.gd_cost, label='symmetric')
-plt.plot(asymetric_run.gd_cost, label='asymmetric')
-plt.legend()
-plt.show
+    symmetric_run.save('symm{}'.format(i))
+    asymetric_run.save('asymm{}'.format(i))
 
 # TODO: imply nunmpy save or deepdish H5
 
@@ -415,3 +464,4 @@ plt.show
 # TODO: accuracy test?
 # TODO: enforce symmetries?
 # %%
+ 
