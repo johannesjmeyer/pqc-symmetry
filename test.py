@@ -10,3 +10,5 @@ games, labels = ttt.get_data()
 fig = plt.figure()
 ttt.plot(game, plt.gca())
 plt.show()
+
+

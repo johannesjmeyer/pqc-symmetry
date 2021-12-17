@@ -6,6 +6,7 @@ import random
 from copy import copy, deepcopy
 
 ttt_dev = qml.device("default.qubit", wires=9) # the device used to label ttt instances
+#ttt_dev = qml.device("lightning.qubit", wires=9) # the device used to label ttt instances
 # TODO: use other device https://pennylane.ai/plugins.html
 # TODO: implement jax https://pennylane.ai/qml/demos/tutorial_jax_transformations.html
 
@@ -264,9 +265,10 @@ def cost_function_batch(params,games_batch, symmetric):
     '''
     return sum([(full_circ(g,params, symmetric)-get_label(g))**2 for g in games_batch])/np.shape(games_batch)[0]
 
-def gen_games_sample(size, wins=[1, 0, -1]):
+def gen_games_sample(size, wins=[1, 0, -1], output = None):
     '''
     Generates Tensor with 3*size games that are won equally by X, O and 0
+    If the parameter output is a string instead of "None", the sample is stored in a npz file named after the string
     '''
     games_data,labels = get_data()
 
@@ -277,13 +279,23 @@ def gen_games_sample(size, wins=[1, 0, -1]):
         sample += random.sample([a for k, a in enumerate(games_data) if labels[k] == j], size)
         sample_label += size*[j]
 
+    if not output == None:
+        with open(output+'.npz', 'wb') as f:
+                np.savez(f,sample=sample, sample_label = sample_label)
+
+
     return np.tensor(sample), np.tensor(sample_label)
 
 class tictactoeML():
 
-    def __init__(self, symmetric=True, sample_size=5):
+    def __init__(self, symmetric=True, sample_size=5, data_file=None):
         self.opt = qml.GradientDescentOptimizer(0.01)
-        self.sample_games(sample_size)
+
+        if data_file == None:
+            self.sample_games(sample_size)
+        else:
+            self.load_games(data_file, sample_size) # loads games and labels from file
+
         self.symmetric = symmetric
 
     def random_parameters(self, size=1, repetitions=5):
@@ -298,6 +310,22 @@ class tictactoeML():
     def sample_games(self, size):
         # Create random samples with equal amount of wins for X, O and 0
         self.games_sample, self.label_sample = gen_games_sample(size, wins=[-1, 0, 1])
+    
+    def load_games(self, data_file, size):
+        '''
+        Loads games and label from file specified by data_file. The first size data points are retained.
+        If the file is not found, generate a new sample.
+        Currently, load is implemented via numpy.load(file.npz)
+        '''
+        try:
+            with open(data_file+'.npz', 'rb') as f:
+                            print('Loading data file \n')
+                            self.games_sample = np.load(f, allow_pickle = True)['sample'][:size]
+                            self.label_sample = np.load(f, allow_pickle = True)['sample_label'][:size]
+        except IOError: 
+            print('Data sample not found, creating new one')
+            self.sample_games(size)
+
 
     def run(self, steps, resume = False):
         if not resume:
@@ -342,8 +370,12 @@ class tictactoeML():
         plt.show()
 
     def save_run():
-        
+        pass
 
+'''
+#######################################################################################
+NOTE FROM FRANCESCO: I commented this to replace the following actions with run_ttt.py
+#######################################################################################
 # %%
 symmetric_run = tictactoeML()
 asymetric_run = deepcopy(symmetric_run)
@@ -362,6 +394,8 @@ plt.plot(symmetric_run.gd_cost, label='symmetric')
 plt.plot(asymetric_run.gd_cost, label='asymmetric')
 plt.legend()
 plt.show
+'''
+
 
 # TODO: imply nunmpy save or deepdish H5
 
