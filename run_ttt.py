@@ -57,7 +57,7 @@ if not os.path.isfile(args.data): # if the specified data file does not exist
 ###############################################################
 ############## run experiment
 ###############################################################
-exp = tictactoeML(symmetric=str2bool(args.symmetric), sample_size=args.points, data_file=args.data)
+exp = tictactoe(symmetric=str2bool(args.symmetric), sample_size=args.points, data_file=args.data)
 
 # TODO from here, each each step seems to take forever. I am not sure whether it's my pennylane installation or whether I did something stupid (Fra)
 exp.random_parameters(20) # select best of 20 random points as starting point
