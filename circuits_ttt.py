@@ -4,6 +4,7 @@ from pennylane import numpy as np
 from tictactoe import *
 import random
 from copy import copy, deepcopy
+
 import torch
 #import deepdish as dd
 #from jax.config import config
@@ -14,6 +15,7 @@ import torch
 ttt_dev = qml.device("default.qubit", wires=9) # the device used to label ttt instances
 # TODO: use other device https://pennylane.ai/plugins.html
 # TODO: implement jax https://pennylane.ai/qml/demos/tutorial_jax_transformations.html
+
 ###################################################
 ###################################################
 ###################################################
@@ -42,6 +44,7 @@ def corners(param, symm=True):
 
     if symm:
         for i in qubits:
+
             qml.RX(param[0], wires=i)
             qml.RY(param[1], wires=i)
 
@@ -49,7 +52,7 @@ def corners(param, symm=True):
         for n, i in enumerate(qubits):
             qml.RX(param[i], wires=i)
             qml.RY(param[i+1], wires=i)
-        
+
     
      # TODO: add ry
 def edges(param, symm=True):
@@ -58,6 +61,7 @@ def edges(param, symm=True):
 
     if symm:
         for i in qubits:
+
             qml.RX(param[0], wires=i)
             qml.RY(param[1], wires=i)
 
@@ -71,6 +75,7 @@ def center(param):
  
     qml.RX(param[0], wires=8)
     qml.RY(param[1], wires=8)
+
 
 def outer_layer(param, symm=True):
     '''
@@ -160,10 +165,12 @@ def column_layer(params):
 
 
 
+
 #@qml.qnode(ttt_dev, interface='torch')
 def circuit(game, params, symmetric):
         #params_single = params[0]
         #params_multi = params[1]
+
         '''
         prepares the all zero comp basis state then iterates through encoding and layers
         input: params, np array of shape r x 2 x 6 
@@ -177,6 +184,7 @@ def circuit(game, params, symmetric):
 
             if symmetric:
                 data_encoding(ngame)
+
                 corners(params[r, 0, 0])
                 edges(params[r, 0, 1])
                 outer_layer(params[r, 0, 5, 0]) 
@@ -240,11 +248,13 @@ def circuit(game, params, symmetric):
 
 
 
+
 full_circ = qml.QNode(circuit, ttt_dev)
 full_circ_torch = qml.QNode(circuit, ttt_dev, interface='torch')
 #full_circ_jax = qml.QNode(circuit, ttt_dev, interface='jax')
 
 #full_circ = jax.jit(full_circ_jax)
+
 ###################################################
 ###################################################
 ###################################################
@@ -270,6 +280,7 @@ rng = np.random.default_rng(2021)
 
 ############################
 
+
 def random_params_old(repetitions, symmetric):
     if symmetric:
         return np.array(rng.uniform(low=-1, high=1, size=(repetitions,2,3)), requires_grad = True)
@@ -294,6 +305,7 @@ def random_params_torch(repetitions, symmetric):
     else:
         return torch.tensor(rng.uniform(low=-1, high=1, size=(repetitions,118)), requires_grad = True)
 
+
 def cost_function(params,game, symmetric):
     return (full_circ(game,params, symmetric)-get_label(game))**2
 
@@ -302,6 +314,7 @@ def cost_function_batch(params,games_batch, symmetric):
     normalized least squares cost function over batch of data points (games)
     '''
     return sum([(full_circ(g,params, symmetric)-get_label(g))**2 for g in games_batch])/np.shape(games_batch)[0]
+
 
 def cost_function_torch(params,game, symmetric):
     return (full_circ_torch(game,params, symmetric)-get_label(game))**2
@@ -312,9 +325,10 @@ def cost_function_batch_torch(params,games_batch, symmetric):
     '''
     return sum([(full_circ_torch(g,params, symmetric)-get_label(g))**2 for g in games_batch])/np.shape(games_batch)[0]
 
-def gen_games_sample(size, wins=[1, 0, -1]):
+def gen_games_sample(size, wins=[1, 0, -1], output = None):
     '''
     Generates Tensor with 3*size games that are won equally by X, O and 0
+    If the parameter output is a string instead of "None", the sample is stored in a npz file named after the string
     '''
     games_data,labels = get_data()
 
@@ -324,14 +338,24 @@ def gen_games_sample(size, wins=[1, 0, -1]):
     for j in wins:
         sample += random.sample([a for k, a in enumerate(games_data) if labels[k] == j], size)
         sample_label += size*[j]
+     
+    if not output == None:
+        with open(output+'.npz', 'wb') as f:
+                np.savez(f,sample=sample, sample_label = sample_label)
+
 
     return np.tensor(sample, requires_grad=False), np.tensor(sample_label, requires_grad=False)
 class tictactoe():
 
-    def __init__(self, symmetric=True, sample_size=10):
+    def __init__(self, symmetric=True, sample_size=5, data_file=None):
         #self.opt = qml.GradientDescentOptimizer(0.01)
         self.sample_size = sample_size
-        self.sample_games(sample_size)
+        
+        if data_file == None:
+            self.sample_games(sample_size)
+        else:
+            self.load_games(data_file, sample_size) # loads games and labels from file
+
         self.symmetric = symmetric
 
     def random_parameters(self, size=1, repetitions=2, torch=True):
@@ -346,6 +370,7 @@ class tictactoe():
                 params_list = [random_params_torch(repetitions, self.symmetric) for i in range(size)]
             else: 
                 params_list = [random_params(repetitions, self.symmetric) for i in range(size)]
+
             cost_list = [cost_function_batch(k,self.games_sample, self.symmetric) for k in params_list]
             self.init_params = params_list[np.argmin(cost_list)]
 
@@ -353,9 +378,26 @@ class tictactoe():
         # Create random samples with equal amount of wins for X, O and 0
         self.games_sample, self.label_sample = gen_games_sample(size, wins=[-1, 0, 1])
 
+    def load_games(self, data_file, size):
+        '''
+        Loads games and label from file specified by data_file. The first size data points are retained.
+        If the file is not found, generate a new sample.
+        Currently, load is implemented via numpy.load(file.npz)
+        '''
+        try:
+            with open(data_file+'.npz', 'rb') as f:
+                            print('Loading data file \n')
+                            self.games_sample = np.load(f, allow_pickle = True)['sample'][:size]
+                            self.label_sample = np.load(f, allow_pickle = True)['sample_label'][:size]
+        except IOError: 
+            print('Data sample not found, creating new one')
+            self.sample_games(size)
+
+
     def run(self, steps, resume = False):
         self.interface = 'pennylane'
         self.opt = qml.GradientDescentOptimizer(0.01)
+
         if not resume:
             self.gd_cost = []
             self.theta = self.init_params
@@ -405,10 +447,12 @@ class tictactoe():
         results = {-1: {}, 0: {}, 1: {}}
         results_alt = {-1: [], 0: [], 1: []}
         for i, game in enumerate(games_check[:500]):
+
             if self.interface == 'torch':
                 res_device = round(float(full_circ_torch(game, self.theta, self.symmetric)), 3)
             else:
                 res_device = round(float(full_circ(game, self.theta, self.symmetric)), 3)
+
             res_true = int(labels_check[i])
             results_alt[res_true].append(res_device)
             if res_device in results[res_true]:
@@ -435,23 +479,31 @@ class tictactoe():
         'initial parameters': self.init_params.detach().numpy(), 'sampled games': self.games_sample.numpy(), 'theta': self.theta.detach().numpy()}
         #dd.io.save(name + '.h5', to_save)
         np.save(name, to_save)
+
+'''
+#######################################################################################
+NOTE FROM FRANCESCO: I commented this to replace the following actions with run_ttt.py
+#######################################################################################
 # %%
-for i in range(20):
-    symmetric_run = tictactoe()
-    asymetric_run = deepcopy(symmetric_run)
-    asymetric_run.symmetric = False
+symmetric_run = tictactoeML()
+asymetric_run = deepcopy(symmetric_run)
+asymetric_run.symmetric = False
 
-    symmetric_run.random_parameters()
-    asymetric_run.random_parameters()
+symmetric_run.random_parameters(20)
+asymetric_run.random_parameters(20)
 
-    symmetric_run.run_torch(10)
-    asymetric_run.run_torch(10)
+symmetric_run.run(100)
+asymetric_run.run(100)
 
-    symmetric_run.check_accuracy()
-    asymetric_run.check_accuracy()
+symmetric_run.check_accuracy()
+asymetric_run.check_accuracy()
 
-    symmetric_run.save('symm{}'.format(i))
-    asymetric_run.save('asymm{}'.format(i))
+plt.plot(symmetric_run.gd_cost, label='symmetric')
+plt.plot(asymetric_run.gd_cost, label='asymmetric')
+plt.legend()
+plt.show
+'''
+
 
 # TODO: imply nunmpy save or deepdish H5
 
@@ -464,4 +516,3 @@ for i in range(20):
 # TODO: accuracy test?
 # TODO: enforce symmetries?
 # %%
- 
