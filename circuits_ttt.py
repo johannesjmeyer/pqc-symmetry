@@ -230,7 +230,7 @@ def translate_to_parameters(design, symmetric=True):
         
 
     return param_args
-# %%
+
 #@qml.qnode(ttt_dev, interface='torch')
 def circuit(game, params, symmetric, design="tceocem tceicem tcedcem"):
         '''
@@ -256,7 +256,7 @@ def circuit(game, params, symmetric, design="tceocem tceicem tcedcem"):
         for r in range(params.shape[0]): # r repetitions
        
 
-            for i, n in enumerate(design.replace(" ", "")):
+            for n, i in enumerate(design.replace(" ", "")):
                 if i == 't':
                     data_encoding(ngame)
                 elif i == 'c':
@@ -276,8 +276,6 @@ def circuit(game, params, symmetric, design="tceocem tceicem tcedcem"):
         return qml.expval(qml.PauliZ(8)) # measure one qubit in comp basis
 
 
-
-
 full_circ = qml.QNode(circuit, ttt_dev)
 full_circ_torch = qml.QNode(circuit, ttt_dev, interface='torch')
 #full_circ_jax = qml.QNode(circuit, ttt_dev, interface='jax')
@@ -293,39 +291,34 @@ rng = np.random.default_rng(2021)
 
 ############################
 
-def random_params(repetitions, symmetric, design, torch=False):
+def random_params(repetitions, symmetric, design, enable_torch=False):
     '''
     returns array/torch tensor of paramters for amount of repetitions and circuit design
     '''
-    params = rng.uniform(low=-1, high=1, size=(repetitions,np.sum(translate_to_parameters(design, symmetric))))
-    if torch:
+    params = rng.uniform(low=-1, high=1, size=(repetitions,translate_to_parameters(design, symmetric)[-1]))
+    if enable_torch:
         return torch.tensor(params, requires_grad = True)
     else: 
         return np.array(params, requires_grad = True)
 
-def random_params_torch(repetitions, symmetric, design):
-    '''
-    returns torch tensor of paramters for amount of repetitions and circuit design
-    '''
-    return torch.tensor(rng.uniform(low=-1, high=1, size=(repetitions,np.sum(translate_to_parameters(design, symmetric)))), requires_grad = True)
 
-def cost_function(params,game, symmetric):
-    return (full_circ(game,params, symmetric)-get_label(game))**2
+def cost_function(params,game, symmetric, design):
+    return (full_circ(game,params, symmetric, design=design)-get_label(game))**2
 
-def cost_function_batch(params,games_batch, symmetric):
+def cost_function_batch(params,games_batch, symmetric, design):
     '''
     normalized least squares cost function over batch of data points (games)
     '''
-    return sum([(full_circ(g,params, symmetric)-get_label(g))**2 for g in games_batch])/np.shape(games_batch)[0]
+    return sum([(full_circ(g,params, symmetric, design=design)-get_label(g))**2 for g in games_batch])/np.shape(games_batch)[0]
 
-def cost_function_torch(params,game, symmetric):
-    return (full_circ_torch(game,params, symmetric)-get_label(game))**2
+def cost_function_torch(params,game, symmetric, design):
+    return (full_circ_torch(game,params, symmetric, design=design)-get_label(game))**2
 
-def cost_function_batch_torch(params,games_batch, symmetric):
+def cost_function_batch_torch(params,games_batch, symmetric, design):
     '''
     normalized least squares cost function over batch of data points (games)
     '''
-    return sum([(full_circ_torch(g,params, symmetric)-get_label(g))**2 for g in games_batch])/np.shape(games_batch)[0]
+    return sum([(full_circ_torch(g,params, symmetric, design=design)-get_label(g))**2 for g in games_batch])/np.shape(games_batch)[0]
 
 def gen_games_sample(size, wins=[1, 0, -1], output = None):
     '''
@@ -362,7 +355,7 @@ class tictactoe():
 
         self.symmetric = symmetric
 
-    def random_parameters(self, size=1, repetitions=2, torch=True):
+    def random_parameters(self, size=1, repetitions=2):
         '''
         sets random parameters for circuit design and amount of repetitions
         '''
@@ -411,8 +404,8 @@ class tictactoe():
             self.gd_cost = []
             self.theta = self.init_params
         for j in range(steps):
-            self.theta = self.opt.step(lambda x: cost_function_batch(x, self.games_sample, self.symmetric),self.theta)
-            cost_temp = cost_function_batch(self.theta,self.games_sample, self.symmetric)
+            self.theta = self.opt.step(lambda x: cost_function_batch(x, self.games_sample, self.symmetric, design=self.design),self.theta)
+            cost_temp = cost_function_batch(self.theta,self.games_sample, self.symmetric, design=self.design)
             print(f"step {j} current cost value: {cost_temp}")
             self.gd_cost.append(cost_temp)   
             self.steps = j     
@@ -427,18 +420,18 @@ class tictactoe():
         self.interface = 'torch'
         if not resume:
             self.gd_cost = []
-            self.theta = self.init_params
+            self.theta = self.init_params_torch
 
         self.opt = torch.optim.LBFGS([self.theta], lr=stepsize)
 
         def closure():
             self.opt.zero_grad()
-            loss = cost_function_batch_torch(self.theta, self.games_sample, self.symmetric)
+            loss = cost_function_batch_torch(self.theta, self.games_sample, self.symmetric, self.design)
             loss.backward()
             return loss
         
         for j in range(steps):
-            cost_temp = cost_function_batch_torch(self.opt.param_groups[0]['params'][0],self.games_sample, self.symmetric)
+            cost_temp = cost_function_batch_torch(self.opt.param_groups[0]['params'][0],self.games_sample, self.symmetric, self.design)
             print(f"step {j} current cost value: {cost_temp}")
             
             self.opt.step(closure)
@@ -448,7 +441,7 @@ class tictactoe():
             self.gd_cost.append(cost_temp) 
             self.steps = j
         
-        cost_temp = cost_function_batch_torch(self.opt.param_groups[0]['params'][0],self.games_sample, self.symmetric)
+        cost_temp = cost_function_batch_torch(self.opt.param_groups[0]['params'][0],self.games_sample, self.symmetric, self.design)
         print(f"final step current cost value: {cost_temp}")
 
         self.theta = self.opt.param_groups[0]['params'][0]  
@@ -463,9 +456,9 @@ class tictactoe():
         for i, game in enumerate(games_check[:500]):
 
             if self.interface == 'torch':
-                res_device = round(float(full_circ_torch(game, self.theta, self.symmetric)), 3)
+                res_device = round(float(full_circ_torch(game, self.theta, self.symmetric, design=self.design)), 3)
             else:
-                res_device = round(float(full_circ(game, self.theta, self.symmetric)), 3)
+                res_device = round(float(full_circ(game, self.theta, self.symmetric, design=self.design)), 3)
 
             res_true = int(labels_check[i])
             results_alt[res_true].append(res_device)
@@ -495,16 +488,15 @@ class tictactoe():
         '''
         saves result of qml as a npy file. Can be analyzed later
         '''
-        to_save = {'symmetric': self.symmetric, 'accuracy': self.accuracy, 'steps': self.steps,  'interface': self.interface, 'cost function': self.gd_cost, 'sample size': self.sample_size, \
+        to_save = {'symmetric': self.symmetric, 'accuracy': self.accuracy, 'steps': self.steps, 'design': self.design, 'interface': self.interface, 'cost function': self.gd_cost, 'sample size': self.sample_size, \
         'initial parameters': self.init_params.detach().numpy(), 'sampled games': self.games_sample.numpy(), 'theta': self.theta.detach().numpy()}
         #dd.io.save(name + '.h5', to_save)
         np.save(name, to_save)
 
+#######################################################################################
+#NOTE FROM FRANCESCO: I commented this to replace the following actions with run_ttt.py
+#######################################################################################
 '''
-#######################################################################################
-NOTE FROM FRANCESCO: I commented this to replace the following actions with run_ttt.py
-#######################################################################################
-# %%
 symmetric_run = tictactoeML()
 asymetric_run = deepcopy(symmetric_run)
 asymetric_run.symmetric = False

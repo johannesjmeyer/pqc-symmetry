@@ -42,6 +42,20 @@ parser.add_argument('-d', "--data", type=str, default = 'ttt_data_sample',
 parser.add_argument('-p', "--points", type=int, default = 10,
                     help='number of data points to use') 
 
+# circuit design          
+parser.add_argument('-l', "--layout", type=str, default = 'tceocem tceicem tcedcem',
+                    help='string specifying order of encoding layers: \
+                    \n t: encode game \
+                    \n c: corners \
+                    \n e: edges \
+                    \n m: middle/center \
+                    \n o: outer layer \
+                    \n i: inner layer  \
+                    \nd: diagonal layer') 
+                
+
+parser.add_argument('-f', "--filename", type=int, default = 10,
+                    help='filename to save') 
 
 args = parser.parse_args()
 
@@ -57,9 +71,10 @@ if not os.path.isfile(args.data): # if the specified data file does not exist
 ###############################################################
 ############## run experiment
 ###############################################################
-exp = tictactoe(symmetric=str2bool(args.symmetric), sample_size=args.points, data_file=args.data)
+exp = tictactoe(symmetric=str2bool(args.symmetric), sample_size=args.points, data_file=args.data, design=args.layout)
 
 # TODO from here, each each step seems to take forever. I am not sure whether it's my pennylane installation or whether I did something stupid (Fra)
-exp.random_parameters(20) # select best of 20 random points as starting point
-exp.run(args.num_steps)
+exp.random_parameters(1) # select best of 20 random points as starting point
+exp.run_lbgfs(args.num_steps)
 exp.check_accuracy()
+exp.save(args.filename)
