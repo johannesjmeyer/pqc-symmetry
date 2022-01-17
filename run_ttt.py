@@ -1,11 +1,13 @@
+# %%
 from tictactoe import *
 from circuits_ttt import *
 
 import argparse # parser for command line options
 import glob
-
+from timeit import default_timer as timer
 
 np.set_printoptions(precision = 2,linewidth = 200)
+# %%
 
 ###############################################################
 ############## parse command line options
@@ -30,7 +32,7 @@ parser.add_argument('-s', "--symmetric", type=str, default = 'false',
                     help='if true, ttt symmetry is enforced')
 
 # length of experiment                  
-parser.add_argument('-n', "--num_steps", type=int, default =100,
+parser.add_argument('-n', "--num_steps", type=int, default =15,
                     help='number of gradient descent steps') 
 
 # file containing data points for this experiment                 
@@ -38,7 +40,7 @@ parser.add_argument('-d', "--data", type=str, default = 'ttt_data_sample',
                     help='file of data points for training') 
                     # we feed the data file for reproducibility and facilitate comparison between symm/asymm
 
-# number of data points in file to use             
+# number of data points infile to use             
 parser.add_argument('-p', "--points", type=int, default = 10,
                     help='number of data points to use') 
 
@@ -54,8 +56,23 @@ parser.add_argument('-l', "--layout", type=str, default = 'tceocem tceicem tcedc
                     \nd: diagonal layer') 
                 
 
-parser.add_argument('-f', "--filename", type=int, default = 10,
+parser.add_argument('-f', "--filename", type=str, default = 'save',
                     help='filename to save') 
+
+parser.add_argument('-lb', "--lbfgs", type=str, default = 'true',
+                    help='Use torches lbfgs implementation') 
+
+parser.add_argument('-ss', "--stepsize", type=float, default = 0.1,
+                    help='specifies step size of gradient descent optimizer') 
+
+parser.add_argument('-r', "--altresult", type=str, default = 'true',
+                    help='if false, encode result in single qubit \n if true, encode result in grid.  ') 
+
+parser.add_argument('-sr', "--samplerandom", type=str, default = 'false',
+                    help='if true, pick new random games for each step') 
+
+parser.add_argument('-wr', "--winsrandom", type=str, default = 'false',
+                    help='if true, chooses games randomly without even distribution of wins') 
 
 args = parser.parse_args()
 
@@ -71,10 +88,17 @@ if not os.path.isfile(args.data): # if the specified data file does not exist
 ###############################################################
 ############## run experiment
 ###############################################################
-exp = tictactoe(symmetric=str2bool(args.symmetric), sample_size=args.points, data_file=args.data, design=args.layout)
+start = timer()
+exp = tictactoe(symmetric=str2bool(args.symmetric), sample_size=args.points, data_file=args.data, design=args.layout, alt_results=str2bool(args.altresult), \
+    random_sample=str2bool(args.samplerandom), random_wins=str2bool(args.winsrandom))
 
 # TODO from here, each each step seems to take forever. I am not sure whether it's my pennylane installation or whether I did something stupid (Fra)
 exp.random_parameters(1) # select best of 20 random points as starting point
-exp.run_lbgfs(args.num_steps)
+if str2bool(args.lbfgs):
+    exp.run_lbgfs(args.num_steps, args.stepsize)
+else:
+    exp.run(args.num_steps, args.stepsize)
 exp.check_accuracy()
 exp.save(args.filename)
+end = timer()
+print('Total execution time: {} s'.format(end - start))
