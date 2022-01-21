@@ -7,6 +7,7 @@ import random
 from copy import copy, deepcopy
 from tabulate import tabulate
 from timeit import default_timer as timer 
+import os
 
 import torch
 #import deepdish as dd
@@ -392,6 +393,8 @@ def get_results(result):
     result = torch.cat(avg_result)
     return result
 
+games_data,labels = get_data()
+
 def gen_games_sample(size, wins=[1, 0, -1], output = None):
     '''
     Generates Tensor with 3*size games that are won equally by X, O and 0
@@ -399,10 +402,9 @@ def gen_games_sample(size, wins=[1, 0, -1], output = None):
 
     param wins: list of wins to be included in sample. If empty, returns completely random sample.
     '''
-    games_data,labels = get_data()
-
     sample = []
     sample_label = []
+    print('Generating new samples...')
     
     if wins:
         for j in wins:
@@ -448,6 +450,7 @@ class tictactoe():
         '''
         sets random parameters for circuit design and amount of repetitions
         '''
+        self.repetitions = repetitions
         if size==1:
             self.init_params_torch = random_params(repetitions, self.symmetric, self.design, True)
             self.init_params = random_params(repetitions, self.symmetric, self.design)
@@ -517,7 +520,7 @@ class tictactoe():
         '''
         print('running lbgfs...')
         print(tabulate([['steps', steps], ['stepsize', stepsize], ['symmetric', self.symmetric], ['design', self.design], ['sample size', 3*self.sample_size], \
-            ['random sample', self.random]]))
+            ['random sample', self.random], ['design', self.design], ['repetitions', self.repetitions]]))
 
         self.interface = 'torch'
         if not resume:
@@ -587,9 +590,13 @@ class tictactoe():
         self.accuracy = {-1: {}, 0: {}, 1: {}}
 
         if self.alt_results:
-            self.accuracy[-1] = len([j for j in results_alt[-1] if j[0] > 0.5 and j[1] < 0.5 and j[2] < 0.5])/len(results_alt[-1])
-            self.accuracy[0] = len([j for j in results_alt[0] if j[0] < 0.5 and j[1] > 0.5 and j[2] < 0.5])/len(results_alt[0])
-            self.accuracy[1] = len([j for j in results_alt[1] if j[0] < 0.5 and j[1] < 0.5 and j[2] > 0.5])/len(results_alt[1])
+            #self.accuracy[-1] = len([j for j in results_alt[-1] if j[0] > 0.5 and j[1] < 0.5 and j[2] < 0.5])/len(results_alt[-1])
+            #self.accuracy[0] = len([j for j in results_alt[0] if j[0] < 0.5 and j[1] > 0.5 and j[2] < 0.5])/len(results_alt[0])
+            #self.accuracy[1] = len([j for j in results_alt[1] if j[0] < 0.5 and j[1] < 0.5 and j[2] > 0.5])/len(results_alt[1])
+
+            self.accuracy[-1] = len([j for j in results_alt[-1] if j[0] > j[1] and j[0] > j[2]])/len(results_alt[-1])
+            self.accuracy[0] = len([j for j in results_alt[0] if j[1] > j[0] and j[1] > j[2]])/len(results_alt[0])
+            self.accuracy[1] = len([j for j in results_alt[1] if j[2] > j[1] and j[2] > j[0]])/len(results_alt[1])
             
         else:
             self.accuracy[-1] = len([j for j in results_alt[-1] if (j <= -(1/3))])/len(results_alt[-1])
@@ -622,8 +629,11 @@ class tictactoe():
         'initial parameters': params_tmp, 'sampled games': self.games_sample.numpy(), 'theta': theta_tmp}
         #dd.io.save(name + '.h5', to_save)
         print('Saving results as {}.npy'.format(name))
-        np.save('output/'+name, to_save)
-
+        try:
+            np.save('output/'+name, to_save)
+        except FileNotFoundError:
+            os.makedirs(os.getcwd()+'/output/'+name[::-1].split('/', 1)[1][::-1])
+            np.save('output/'+name, to_save)
 # TODO: run on cloud/cluster
 # TODO: try different circuits
 

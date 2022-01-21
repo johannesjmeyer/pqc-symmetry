@@ -74,6 +74,9 @@ parser.add_argument('-sr', "--samplerandom", type=str, default = 'false',
 parser.add_argument('-wr', "--winsrandom", type=str, default = 'false',
                     help='if true, chooses games randomly without even distribution of wins') 
 
+parser.add_argument('-re', "--repetitions", type=int, default = 2,
+                    help='how many times to repeat layout') 
+
 args = parser.parse_args()
 
 
@@ -93,7 +96,7 @@ exp = tictactoe(symmetric=str2bool(args.symmetric), sample_size=args.points, dat
     random_sample=str2bool(args.samplerandom), random_wins=str2bool(args.winsrandom))
 
 # TODO from here, each each step seems to take forever. I am not sure whether it's my pennylane installation or whether I did something stupid (Fra)
-exp.random_parameters(1) # select best of 20 random points as starting point
+exp.random_parameters(1, repetitions=args.repetitions) # select best of 20 random points as starting point
 if str2bool(args.lbfgs):
     exp.run_lbgfs(args.num_steps, args.stepsize)
 else:
