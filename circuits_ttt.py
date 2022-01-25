@@ -8,6 +8,7 @@ from copy import copy, deepcopy
 from tabulate import tabulate
 from timeit import default_timer as timer 
 import os
+from sklearn.metrics import confusion_matrix
 
 import torch
 #import deepdish as dd
@@ -342,8 +343,9 @@ def cost_function_alt(circ, params, game, symmetric, design="tceocem tceicem tce
 def cost_function_alt_batch(circ, params, games, symmetric, design="tceocem tceicem tcedcem"):
     
     final_results = torch.zeros(len(games))
-
-    for i, g in enumerate(games):
+    # replace for loop with result = map...
+    # functiontools.partial if lambda doesn't work
+    for i, g in enumerate(games):  # TODO: implement multiprocessing with pool here
 
         result = circ(g,params, symmetric, design=design, alt_results=True)#.detach().numpy()
         label = get_label(g)
@@ -352,13 +354,8 @@ def cost_function_alt_batch(circ, params, games, symmetric, design="tceocem tcei
         won[label+1] = 1
 
         avg_result = get_results(result)
-        global testres
-        testres = avg_result
 
         final_results[i] = torch.sum((avg_result - won)**2)
-        #avg_result = []
-        #for i in np.array([-1, 0, 1])+1:
-        #    avg_result.append((np.average(result[slicer[i]]) - won[i])**2)
     
     return torch.mean(final_results)
 
@@ -554,23 +551,29 @@ class tictactoe():
 
         self.theta = self.opt.param_groups[0]['params'][0]  
             
-    def check_accuracy(self, check_size = 100):
+    def check_accuracy(self, check_size = 100): # TODO: check if accuracy varies for same run
+        # TODO: implement confusion matrix
         '''
         checks accuracy of current theta by sampling check_size amount of games for each win
         '''
         games_check, labels_check = gen_games_sample(check_size)
         results = {-1: {}, 0: {}, 1: {}}
         results_alt = {-1: [], 0: [], 1: []}
+        res_circ = []
+        res_true = []
+
         for i, game in enumerate(games_check[:500]):
 
-            res_true = int(labels_check[i])
+            res_true.append(int(labels_check[i]))
 
             if self.alt_results:
                 res = full_circ_torch(game, self.theta, self.symmetric, design=self.design, alt_results=True)
 
                 avg_results = get_results(res)
 
-                results_alt[res_true].append(avg_results)
+                res_circ.append(avg_results.detach().numpy())
+
+                results_alt[res_true[i]].append(avg_results)
 
             else:
                 if self.interface == 'torch':
@@ -578,35 +581,34 @@ class tictactoe():
                 else:
                     res_device = round(float(full_circ(game, self.theta, self.symmetric, design=self.design)), 3)
 
-                results_alt[res_true].append(res_device)
-                if res_device in results[res_true]:
-                    results[res_true][res_device] += 1
+                results_alt[res_true[i]].append(res_device)
+                if res_device in results[res_true[i]]:
+                    results[res_true[i]][res_device] += 1
                 else:
-                    results[res_true][res_device] = 1
+                    results[res_true[i]][res_device] = 1
 
         #self.results = results
 
         # check accuracy
-        self.accuracy = {-1: {}, 0: {}, 1: {}}
 
         if self.alt_results:
-            #self.accuracy[-1] = len([j for j in results_alt[-1] if j[0] > 0.5 and j[1] < 0.5 and j[2] < 0.5])/len(results_alt[-1])
-            #self.accuracy[0] = len([j for j in results_alt[0] if j[0] < 0.5 and j[1] > 0.5 and j[2] < 0.5])/len(results_alt[0])
-            #self.accuracy[1] = len([j for j in results_alt[1] if j[0] < 0.5 and j[1] < 0.5 and j[2] > 0.5])/len(results_alt[1])
-
-            self.accuracy[-1] = len([j for j in results_alt[-1] if j[0] > j[1] and j[0] > j[2]])/len(results_alt[-1])
-            self.accuracy[0] = len([j for j in results_alt[0] if j[1] > j[0] and j[1] > j[2]])/len(results_alt[0])
-            self.accuracy[1] = len([j for j in results_alt[1] if j[2] > j[1] and j[2] > j[0]])/len(results_alt[1])
+            # confusion matrix:
+            won = [-1, 0, 1]
+            res_circ2 = [won[i.argmax()] for i in res_circ]
+            self.confusion_matrix = confusion_matrix(res_true, res_circ2, normalize='truw')
+            self.accuracy = self.confusion_matrix.trace()/3
+            print('Confusion matrix:')
+            print(self.confusion_matrix)
+            #self.accuracy[-1] = len([j for j in results_alt[-1] if j[0] > j[1] and j[0] > j[2]])/len(results_alt[-1])
+            #self.accuracy[0] = len([j for j in results_alt[0] if j[1] > j[0] and j[1] > j[2]])/len(results_alt[0])
+            #self.accuracy[1] = len([j for j in results_alt[1] if j[2] > j[1] and j[2] > j[0]])/len(results_alt[1])
             
         else:
+            self.accuracy = {-1: {}, 0: {}, 1: {}}
             self.accuracy[-1] = len([j for j in results_alt[-1] if (j <= -(1/3))])/len(results_alt[-1])
             self.accuracy[0] = len([j for j in results_alt[0] if ((j > -(1/3)) and (j < 1/3))])/len(results_alt[0])
             self.accuracy[1] = len([j for j in results_alt[1] if (j >= (1/3))])/len(results_alt[1])
-
-
-
-
-        print('Accuracy for random sample of {} games: \n\n \t\t -1: {}% \n \t\t  0: {}% \n \t\t  1: {}%'.format(check_size*3, self.accuracy[-1]*100, self.accuracy[0]*100, self.accuracy[1]*100))
+            print('Accuracy for random sample of {} games: \n\n \t\t -1: {}% \n \t\t  0: {}% \n \t\t  1: {}%'.format(check_size*3, self.accuracy[-1]*100, self.accuracy[0]*100, self.accuracy[1]*100))
 
     def plot_cost(self):
         '''
