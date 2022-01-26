@@ -9,7 +9,7 @@ from tabulate import tabulate
 from timeit import default_timer as timer 
 import os
 from sklearn.metrics import confusion_matrix
-
+from torch.multiprocessing import Pool
 import torch
 #import deepdish as dd
 #from jax.config import config
@@ -340,22 +340,37 @@ def cost_function_alt(circ, params, game, symmetric, design="tceocem tceicem tce
     
     return np.sum(avg_result)
 
-def cost_function_alt_batch(circ, params, games, symmetric, design="tceocem tceicem tcedcem"):
+def parallelized_cost_function(game, circ, params, symmetric, design):
+
+    result = circ(game ,params, symmetric, design=design, alt_results=True)#.detach().numpy()
+    label = get_label(game)
+    print('test')
+    won = torch.zeros(3)
+    won[label+1] = 1
+
+    avg_result = get_results(result)
+
+    return torch.sum((avg_result - won)**2)
+
+def cost_function_alt_batch(circ, params, games, symmetric, design="tceocem tceicem tcedcem", parallelize=False):
     
-    final_results = torch.zeros(len(games))
-    # replace for loop with result = map...
-    # functiontools.partial if lambda doesn't work
-    for i, g in enumerate(games):  # TODO: implement multiprocessing with pool here
+    if parallelize:
+        process_pool = Pool()
+        data = [(g, circ, params, symmetric, design) for g in games]
+        final_results = torch.tensor(process_pool.starmap(parallelized_cost_function, data))
+    else:
+        final_results = torch.zeros(len(games))
+        for i, g in enumerate(games):  # TODO: implement multiprocessing with pool here
 
-        result = circ(g,params, symmetric, design=design, alt_results=True)#.detach().numpy()
-        label = get_label(g)
-        
-        won = torch.zeros(3)
-        won[label+1] = 1
+            result = circ(g,params, symmetric, design=design, alt_results=True)#.detach().numpy()
+            label = get_label(g)
+            
+            won = torch.zeros(3)
+            won[label+1] = 1
 
-        avg_result = get_results(result)
+            avg_result = get_results(result)
 
-        final_results[i] = torch.sum((avg_result - won)**2)
+            final_results[i] = torch.sum((avg_result - won)**2)
     
     return torch.mean(final_results)
 
