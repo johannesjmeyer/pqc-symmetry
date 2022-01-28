@@ -9,6 +9,7 @@ from tabulate import tabulate
 from timeit import default_timer as timer 
 import os
 from sklearn.metrics import confusion_matrix
+from torch import multiprocessing as mp
 from torch.multiprocessing import Pool
 import torch
 #import deepdish as dd
@@ -26,6 +27,11 @@ ttt_dev = qml.device("default.qubit", wires=9) # the device used to label ttt in
 ###################################################
 args_symmetric = {'c': 2, 'e': 2, 'o': 1, 'm': 2, 'i': 1, 'd': 1}
 args_asymmetric = {'c': 8, 'e': 8, 'o': 8, 'm': 2, 'i': 4, 'd': 4}
+
+
+#if __name__ == '__main__':
+mp.set_start_method("spawn")
+
 
 def data_encoding(game):
     '''
@@ -339,10 +345,9 @@ def cost_function_alt(circ, params, game, symmetric, design="tceocem tceicem tce
         avg_result.append((np.average(result[slicer[i]]) - won[i])**2)
     
     return np.sum(avg_result)
-
 def parallelized_cost_function(game, circ, params, symmetric, design):
 
-    result = circ(game ,params, symmetric, design=design, alt_results=True)#.detach().numpy()
+    result = circ(game ,params, symmetric, design=design, alt_results=True)
     label = get_label(game)
     print('test')
     won = torch.zeros(3)
@@ -356,8 +361,11 @@ def cost_function_alt_batch(circ, params, games, symmetric, design="tceocem tcei
     
     if parallelize:
         process_pool = Pool()
-        data = [(g, circ, params, symmetric, design) for g in games]
-        final_results = torch.tensor(process_pool.starmap(parallelized_cost_function, data))
+        #data = [(g, circ, params, symmetric, design) for g in games]
+        #final_results = torch.tensor(process_pool.starmap(parallelized_cost_function, data))
+        #para = lambda g: parallelized_cost_function(g, circ, params, symmetric, design)
+        para = partial(parallelized_cost_function,  circ=circ, params=params, symmetric=symmetric, design=design)
+        final_results = process_pool.map(para, games)
     else:
         final_results = torch.zeros(len(games))
         for i, g in enumerate(games):  # TODO: implement multiprocessing with pool here
@@ -416,7 +424,7 @@ def gen_games_sample(size, wins=[1, 0, -1], output = None):
     '''
     sample = []
     sample_label = []
-    print('Generating new samples...')
+    #print('Generating new samples...')
     
     if wins:
         for j in wins:
@@ -436,7 +444,7 @@ def gen_games_sample(size, wins=[1, 0, -1], output = None):
 
 class tictactoe():
 
-    def __init__(self, symmetric=True, sample_size=5, design="tceocem tceicem tcedcem", data_file=None, alt_results=False, random_sample=False, random_wins = False):
+    def __init__(self, symmetric=True, sample_size=5, design="tceocem tceicem tcedcem", data_file=None, alt_results=True, random_sample=False, random_wins = False):
         #self.opt = qml.GradientDescentOptimizer(0.01)
         self.sample_size = sample_size
         self.design = design
@@ -510,6 +518,7 @@ class tictactoe():
 
         self.interface = 'pennylane'
         self.opt = qml.GradientDescentOptimizer(stepsize)
+        self.stepsize = stepsize
 
         if not resume:
             self.gd_cost = []
@@ -532,7 +541,7 @@ class tictactoe():
         '''
         print('running lbgfs...')
         print(tabulate([['steps', steps], ['stepsize', stepsize], ['symmetric', self.symmetric], ['design', self.design], ['sample size', 3*self.sample_size], \
-            ['random sample', self.random], ['design', self.design], ['repetitions', self.repetitions]]))
+            ['random sample', self.random], ['repetitions', self.repetitions]]))
 
         self.interface = 'torch'
         if not resume:
@@ -540,6 +549,7 @@ class tictactoe():
             self.theta = self.init_params_torch
 
         self.opt = torch.optim.LBFGS([self.theta], lr=stepsize)
+        self.stepsize = stepsize
 
         def closure():
             self.opt.zero_grad()
@@ -550,7 +560,7 @@ class tictactoe():
         step_end = 0
         for j in range(steps):
             cost_temp = self.cost_function(full_circ_torch, self.opt.param_groups[0]['params'][0],self.games_sample, self.symmetric, self.design)
-            print(f"step {j} current cost value: {cost_temp} execution time: {step_end-step_start}s")
+            print(f"step {j}/{steps} current cost value: {cost_temp} execution time: {step_end-step_start}s")
             step_start = timer()
             self.opt.step(closure)
             step_end = timer()
@@ -610,7 +620,7 @@ class tictactoe():
             # confusion matrix:
             won = [-1, 0, 1]
             res_circ2 = [won[i.argmax()] for i in res_circ]
-            self.confusion_matrix = confusion_matrix(res_true, res_circ2, normalize='truw')
+            self.confusion_matrix = confusion_matrix(res_true, res_circ2, normalize='true')
             self.accuracy = self.confusion_matrix.trace()/3
             print('Confusion matrix:')
             print(self.confusion_matrix)
@@ -632,7 +642,7 @@ class tictactoe():
         plt.plot(self.gd_cost)
         plt.show()
 
-    def save(self, name):
+    def save(self, name, exec_time=0):
         '''
         saves result of qml as a npy file. Can be analyzed later
         '''
@@ -642,7 +652,7 @@ class tictactoe():
         elif self.interface == 'pennylane':
             params_tmp = self.init_params.numpy()
             theta_tmp = self.theta.numpy()
-        to_save = {'symmetric': self.symmetric, 'alt result': self.alt_results,'accuracy': self.accuracy, 'steps': self.steps, 'design': self.design, 'interface': self.interface, 'cost function': self.gd_cost, 'sample size': self.sample_size, \
+        to_save = {'symmetric': self.symmetric, 'alt result': self.alt_results,'accuracy': self.confusion_matrix,'execution time': exec_time, 'steps': self.steps, 'stepsize': self.stepsize, 'design': self.design, 'interface': self.interface, 'cost function': self.gd_cost, 'sample size': self.sample_size, \
         'initial parameters': params_tmp, 'sampled games': self.games_sample.numpy(), 'theta': theta_tmp}
         #dd.io.save(name + '.h5', to_save)
         print('Saving results as {}.npy'.format(name))

@@ -5,6 +5,9 @@ from circuits_ttt import *
 import argparse # parser for command line options
 import glob
 from timeit import default_timer as timer
+import time
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
 
 np.set_printoptions(precision = 2,linewidth = 200)
 # %%
@@ -22,6 +25,7 @@ def str2bool(v):
     elif v.lower() in ('no', 'false', 'f', 'n', '0'):
         return False
     else:
+        print(v)
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
 
@@ -36,7 +40,7 @@ parser.add_argument('-n', "--num_steps", type=int, default =15,
                     help='number of gradient descent steps') 
 
 # file containing data points for this experiment                 
-parser.add_argument('-d', "--data", type=str, default = 'ttt_data_sample',
+parser.add_argument('-d', "--data", type=str, default = 'None',
                     help='file of data points for training') 
                     # we feed the data file for reproducibility and facilitate comparison between symm/asymm
 
@@ -56,7 +60,7 @@ parser.add_argument('-l', "--layout", type=str, default = 'tceocem tceicem tcedc
                     \nd: diagonal layer') 
                 
 
-parser.add_argument('-f', "--filename", type=str, default = 'save',
+parser.add_argument('-f', "--foldername", type=str, default = 'output',
                     help='filename to save') 
 
 parser.add_argument('-lb', "--lbfgs", type=str, default = 'true',
@@ -84,15 +88,22 @@ args = parser.parse_args()
 ############## produce data (mostly useful for debugging)
 ###############################################################
 print('1\n')
-import os.path
-if not os.path.isfile(args.data): # if the specified data file does not exist
-    gen_games_sample(args.points, wins=[1, 0, -1], output = args.data) # create data file with specified name and size (# of points)
+if args.data == 'None':
+    data_name = None
+else:
+    import os.path
+    if not os.path.isfile(args.data): # if the specified data file does not exist
+        gen_games_sample(args.points, wins=[1, 0, -1], output = args.data) # create data file with specified name and size (# of points)
+    data_name = args.data
 
 ###############################################################
 ############## run experiment
 ###############################################################
+
+filename = args.foldername + f'/r-{args.repetitions}_l-{args.layout}_ss-{args.stepsize}_p-{args.points}_n-{args.num_steps}_s-{args.symmetric}_sr-{args.samplerandom}_wr-{args.winsrandom}-TIME{int(time.time())}'
+
 start = timer()
-exp = tictactoe(symmetric=str2bool(args.symmetric), sample_size=args.points, data_file=args.data, design=args.layout, alt_results=str2bool(args.altresult), \
+exp = tictactoe(symmetric=str2bool(args.symmetric), sample_size=args.points, data_file=data_name, design=args.layout, alt_results=str2bool(args.altresult), \
     random_sample=str2bool(args.samplerandom), random_wins=str2bool(args.winsrandom))
 
 # TODO from here, each each step seems to take forever. I am not sure whether it's my pennylane installation or whether I did something stupid (Fra)
@@ -102,6 +113,6 @@ if str2bool(args.lbfgs):
 else:
     exp.run(args.num_steps, args.stepsize)
 exp.check_accuracy()
-exp.save(args.filename)
 end = timer()
+exp.save(filename, end - start)
 print('Total execution time: {} s'.format(end - start))
