@@ -1,4 +1,5 @@
 # %%
+from cmath import pi
 from http.client import responses
 import pennylane as qml
 from pennylane import numpy as np
@@ -242,7 +243,7 @@ def translate_to_parameters(design, symmetric=True):
     return param_args
 
 #@qml.qnode(ttt_dev, interface='torch')
-def circuit(game, params, symmetric, design="tceocem tceicem tcedcem", alt_results=False):
+def circuit(game, params, symmetric, design="tceocem tceicem tcedcem", alt_results=True):
         '''
         prepares the all zero comp basis state then iterates through encoding and layers
         encoding and layers are defined by design argument
@@ -345,6 +346,8 @@ def cost_function_alt(circ, params, game, symmetric, design="tceocem tceicem tce
         avg_result.append((np.average(result[slicer[i]]) - won[i])**2)
     
     return np.sum(avg_result)
+
+
 def parallelized_cost_function(game, circ, params, symmetric, design):
 
     result = circ(game ,params, symmetric, design=design, alt_results=True)
@@ -414,8 +417,9 @@ def get_results(result):
     return result
 
 games_data,labels = get_data()
+games_data_reduced, labels_reduced = get_data_symmetric()
 
-def gen_games_sample(size, wins=[1, 0, -1], output = None):
+def gen_games_sample(size, wins=[1, 0, -1], output = None, reduced=False, truesize=False):
     '''
     Generates Tensor with 3*size games that are won equally by X, O and 0
     If the parameter output is a string instead of "None", the sample is stored in a npz file named after the string
@@ -425,13 +429,23 @@ def gen_games_sample(size, wins=[1, 0, -1], output = None):
     sample = []
     sample_label = []
     #print('Generating new samples...')
-    
+    if reduced:
+        data = games_data_reduced
+        data_labels = labels_reduced
+    else: 
+        data = games_data
+        data_labels = labels
     if wins:
-        for j in wins:
-            sample += random.sample([a for k, a in enumerate(games_data) if labels[k] == j], size)
-            sample_label += size*[j]
+        if truesize:
+            for i in range(size):
+                sample += [random.choice([a for k, a in enumerate(data) if data_labels[k] == i%len(wins)-1])]
+                sample_label += [i%len(wins)-1]
+        else:
+            for j in wins:
+                sample += random.sample([a for k, a in enumerate(data) if data_labels[k] == j], size)
+                sample_label += size*[j]
     else:
-        sample += random.sample(list(games_data), size)
+        sample += random.sample(list(data), size)
         sample_label = [get_label(g) for g in sample]
         #sample_label += size*[j]
         
@@ -444,13 +458,14 @@ def gen_games_sample(size, wins=[1, 0, -1], output = None):
 
 class tictactoe():
 
-    def __init__(self, symmetric=True, sample_size=5, design="tceocem tceicem tcedcem", data_file=None, alt_results=True, random_sample=False, random_wins = False):
+    def __init__(self, symmetric=True, sample_size=5, design="tceocem tceicem tcedcem", data_file=None, alt_results=True, random_sample=False, random_wins = False, reduced = False):
         #self.opt = qml.GradientDescentOptimizer(0.01)
         self.sample_size = sample_size
         self.design = design
         self.alt_results = alt_results
         self.random = random_sample
         self.random_wins = random_wins
+        self.reduced = reduced
 
         if alt_results:
             self.cost_function = cost_function_alt_batch
@@ -491,7 +506,7 @@ class tictactoe():
             wins = []
         else:
             wins = [-1, 0, 1]
-        self.games_sample , self.label_sample = gen_games_sample(size, wins=wins)
+        self.games_sample , self.label_sample = gen_games_sample(size, wins=wins, reduced = self.reduced)
 
     def load_games(self, data_file, size):
         '''
@@ -507,6 +522,47 @@ class tictactoe():
         except IOError: 
             print('Data sample not found, creating new one')
             self.sample_games(size)
+
+
+    def run_epochs(self, epochs, samplesize_per_step, steps_per_epoch, stepsize):
+
+        self.batch = gen_games_sample(steps_per_epoch*samplesize_per_step, truesize=True)[0]
+
+        self.interface = 'torch'
+
+        self.gd_cost = []
+        self.theta = self.init_params_torch
+
+        self.opt = torch.optim.LBFGS([self.theta], lr=stepsize)
+        self.stepsize = stepsize
+
+
+        def closure():
+            self.opt.zero_grad()
+            loss = self.cost_function(full_circ_torch, self.theta, self.games_sample, self.symmetric, self.design)
+            loss.backward()
+            return loss
+        
+        step_start = 0
+        step_end = 0
+        
+        for i in range(epochs):
+
+            for j, sample in enumerate([self.batch[k:k+samplesize_per_step] for k in range(0, len(self.batch), samplesize_per_step)]):
+                self.games_sample = sample
+                cost_temp = self.cost_function(full_circ_torch, self.opt.param_groups[0]['params'][0], self.games_sample, self.symmetric, self.design)
+                print(f"epoch {i}/{epochs} step {j}/{steps_per_epoch} current cost value: {cost_temp} execution time: {step_end-step_start}s")
+                step_start = timer()
+                self.opt.step(closure)
+                step_end = timer()
+
+                self.gd_cost.append(cost_temp) 
+                self.steps = j
+            
+            random.shuffle(self.batch)
+        
+        print('Done')
+        self.theta = self.opt.param_groups[0]['params'][0]  
 
 
     def run(self, steps, stepsize=0.01, resume = False):
@@ -556,8 +612,10 @@ class tictactoe():
             loss = self.cost_function(full_circ_torch, self.theta, self.games_sample, self.symmetric, self.design)
             loss.backward()
             return loss
+
         step_start = 0
         step_end = 0
+        
         for j in range(steps):
             cost_temp = self.cost_function(full_circ_torch, self.opt.param_groups[0]['params'][0],self.games_sample, self.symmetric, self.design)
             print(f"step {j}/{steps} current cost value: {cost_temp} execution time: {step_end-step_start}s")

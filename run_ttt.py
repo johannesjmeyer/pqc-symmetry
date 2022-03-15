@@ -81,6 +81,15 @@ parser.add_argument('-wr', "--winsrandom", type=str, default = 'false',
 parser.add_argument('-re', "--repetitions", type=int, default = 2,
                     help='how many times to repeat layout') 
 
+parser.add_argument('-ep', "--epochs", type=str, default = 'false',
+                    help='uses epochs') 
+
+parser.add_argument('-epn', "--epochssize", type=int, default = 10,
+                    help='number of epochs') 
+
+parser.add_argument('-eps', "--epochssize", type=int, default = 100,
+                    help='size of samples per epoch step') 
+
 args = parser.parse_args()
 
 
@@ -108,10 +117,12 @@ exp = tictactoe(symmetric=str2bool(args.symmetric), sample_size=args.points, dat
 
 # TODO from here, each each step seems to take forever. I am not sure whether it's my pennylane installation or whether I did something stupid (Fra)
 exp.random_parameters(1, repetitions=args.repetitions) # select best of 20 random points as starting point
-if str2bool(args.lbfgs):
+if str2bool(args.epochs):
+    exp.run_epochs(args.epochssize, args.points, args.num_steps, args.stepsize)
+elif str2bool(args.lbfgs):
     exp.run_lbgfs(args.num_steps, args.stepsize)
 else:
-    exp.run(args.num_steps, args.stepsize)
+    exp.run(args.num_steps)
 exp.check_accuracy()
 end = timer()
 exp.save(filename, end - start)
