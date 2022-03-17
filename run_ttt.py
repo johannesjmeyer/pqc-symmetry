@@ -87,8 +87,6 @@ parser.add_argument('-ep', "--epochs", type=str, default = 'false',
 parser.add_argument('-epn', "--epochssize", type=int, default = 10,
                     help='number of epochs') 
 
-parser.add_argument('-eps', "--epochssize", type=int, default = 100,
-                    help='size of samples per epoch step') 
 
 args = parser.parse_args()
 
