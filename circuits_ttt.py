@@ -705,7 +705,7 @@ class tictactoe():
 
                 res_circ.append(avg_results.detach().numpy())
 
-                results_alt[res_true[i]].append(avg_results)
+                #results_alt[res_true[i]].append(avg_results) # TODO causes memory build up
 
             else:
                 if self.interface == 'torch':
