@@ -294,7 +294,7 @@ def circuit(game, params, symmetric, design="tceocem tceicem tcedcem", alt_resul
 
 
 full_circ = qml.QNode(circuit, ttt_dev)
-full_circ_torch = qml.QNode(circuit, ttt_dev, interface='torch')
+full_circ_torch = qml.QNode(circuit, ttt_dev, interface='torch') # diff_method="adjoint" is supoosed to limit RAM usage
 #full_circ_jax = qml.QNode(circuit, ttt_dev, interface='jax')
 #full_circ = jax.jit(full_circ_jax)
 
@@ -385,6 +385,27 @@ def cost_function_alt_batch(circ, params, games, symmetric, design="tceocem tcei
     
     return torch.mean(final_results)
 
+def cross_entropy_cost_batch(circ, params, games, symmetric, design):
+
+    cost_vector = torch.zeros(len(games))
+    for i, g in enumerate(games):
+
+        result = (circ(g,params, symmetric, design=design, alt_results=True) + 1)/2
+        label = get_label(g)
+        
+        y = torch.zeros(3)
+        y[label+1] = 1
+        a = (get_results(result) + 1)/2
+
+        #a = result
+        #slicer = [[0, 2, 4, 6], [8], [1, 3, 5, 7]]
+        #y = torch.zeros(9)
+        #y[slicer[label+1]] = 1
+
+        cost_vector[i] = torch.sum(y*torch.log(a)+(1-y)*torch.log(1-a))
+
+    return -torch.mean(cost_vector)
+
 def cost_function_alt_batch_old(circ, params, games, symmetric, design="tceocem tceicem tcedcem"):
     
     slicer = [[0, 2, 4, 6], [8], [1, 3, 5, 7]]
@@ -458,7 +479,7 @@ def gen_games_sample(size, wins=[1, 0, -1], output = None, reduced=False, truesi
 
 class tictactoe():
 
-    def __init__(self, symmetric=True, sample_size=5, design="tceocem tceicem tcedcem", data_file=None, alt_results=True, random_sample=False, random_wins = False, reduced = False):
+    def __init__(self, symmetric=True, sample_size=5, design="tceocem tceicem tcedcem", data_file=None, alt_results=True, random_sample=False, random_wins = False, reduced = False, cross_entropy = False):
         #self.opt = qml.GradientDescentOptimizer(0.01)
         self.sample_size = sample_size
         self.design = design
@@ -466,15 +487,20 @@ class tictactoe():
         self.random = random_sample
         self.random_wins = random_wins
         self.reduced = reduced
+        self.epochs = False
 
-        if alt_results:
+        if cross_entropy:
+            print('cross entropy')
+            self.cost_function = cross_entropy_cost_batch
+        elif alt_results:
+            print('mean squared')
             self.cost_function = cost_function_alt_batch
             #self.cost_function_torch = cost_function_alt_batch_torch
         else:
             self.cost_function = cost_function_batch
             #self.cost_function_torch = cost_function_batch_torch
 
-        if data_file == None:
+        if data_file is None:
             self.sample_games(sample_size)
         else:
             self.load_games(data_file, sample_size) # loads games and labels from file
@@ -524,9 +550,17 @@ class tictactoe():
             self.sample_games(size)
 
 
-    def run_epochs(self, epochs, samplesize_per_step, steps_per_epoch, stepsize):
-
-        self.batch = gen_games_sample(steps_per_epoch*samplesize_per_step, truesize=True)[0]
+    def run_epochs(self, epochs, samplesize_per_step, steps_per_epoch, stepsize, data_file = None):
+        """
+        Runs lbfgs training with different epochs
+        """
+        self.epochs = True
+        if data_file is None:
+            self.batch = gen_games_sample(steps_per_epoch*samplesize_per_step, truesize=True, reduced = self.reduced)[0]
+        else:
+            with open('samples/'+data_file+'.npz', 'rb') as f:
+                            print('Loading data file \n')
+                            self.batch = np.tensor(np.load(f, allow_pickle = True)['sample'], requires_grad=False)
 
         self.interface = 'torch'
 
@@ -535,7 +569,9 @@ class tictactoe():
 
         self.opt = torch.optim.LBFGS([self.theta], lr=stepsize)
         self.stepsize = stepsize
-
+        self.epoch_total_accuracy = []
+        self.epoch_accuracy = []
+        self.epoch_cost_function = []
 
         def closure():
             self.opt.zero_grad()
@@ -560,6 +596,14 @@ class tictactoe():
                 self.steps = j
             
             random.shuffle(self.batch)
+            self.theta = self.opt.param_groups[0]['params'][0]  
+            print(f'epoch {i}/{epochs} accuracy:')
+            self.epoch_accuracy.append(self.check_accuracy(check_batch=self.batch))
+            print(f'epoch {i}/{epochs} total accuracy:')
+            self.epoch_total_accuracy.append(self.check_accuracy())
+            self.epoch_cost_function.append(self.cost_function(full_circ_torch, self.opt.param_groups[0]['params'][0], self.batch, self.symmetric, self.design))
+            #print(f"epoch {i}/{epochs} accuracy: {self.epoch_accuracy[-1]}")
+            print(f"epoch {i}/{epochs} cost function: {self.epoch_cost_function[-1]}")
         
         print('Done')
         self.theta = self.opt.param_groups[0]['params'][0]  
@@ -634,18 +678,23 @@ class tictactoe():
 
         self.theta = self.opt.param_groups[0]['params'][0]  
             
-    def check_accuracy(self, check_size = 100): # TODO: check if accuracy varies for same run
+    def check_accuracy(self, check_size = 100, check_batch = None): # TODO: check if accuracy varies for same run
         # TODO: implement confusion matrix
         '''
         checks accuracy of current theta by sampling check_size amount of games for each win
         '''
-        games_check, labels_check = gen_games_sample(check_size)
+        if check_batch is None:
+            games_check, labels_check = gen_games_sample(check_size)
+        else: 
+            games_check = check_batch
+            labels_check = np.tensor([get_label(i) for i in check_batch])
+
         results = {-1: {}, 0: {}, 1: {}}
         results_alt = {-1: [], 0: [], 1: []}
         res_circ = []
         res_true = []
 
-        for i, game in enumerate(games_check[:500]):
+        for i, game in enumerate(games_check):
 
             res_true.append(int(labels_check[i]))
 
@@ -685,6 +734,8 @@ class tictactoe():
             #self.accuracy[-1] = len([j for j in results_alt[-1] if j[0] > j[1] and j[0] > j[2]])/len(results_alt[-1])
             #self.accuracy[0] = len([j for j in results_alt[0] if j[1] > j[0] and j[1] > j[2]])/len(results_alt[0])
             #self.accuracy[1] = len([j for j in results_alt[1] if j[2] > j[1] and j[2] > j[0]])/len(results_alt[1])
+
+            return self.confusion_matrix
             
         else:
             self.accuracy = {-1: {}, 0: {}, 1: {}}
@@ -712,6 +763,12 @@ class tictactoe():
             theta_tmp = self.theta.numpy()
         to_save = {'symmetric': self.symmetric, 'alt result': self.alt_results,'accuracy': self.confusion_matrix,'execution time': exec_time, 'steps': self.steps, 'stepsize': self.stepsize, 'design': self.design, 'interface': self.interface, 'cost function': self.gd_cost, 'sample size': self.sample_size, \
         'initial parameters': params_tmp, 'sampled games': self.games_sample.numpy(), 'theta': theta_tmp}
+        if self.epochs:
+            to_save['epoch cost'] = self.epoch_cost_function
+            to_save['epoch accuracy'] = self.epoch_accuracy
+            to_save['epoch batch'] = self.batch
+            to_save['epoch total accuracy'] = self.epoch_total_accuracy
+
         #dd.io.save(name + '.h5', to_save)
         print('Saving results as {}.npy'.format(name))
         try:
