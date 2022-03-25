@@ -1,0 +1,8 @@
+numpy
+pennylane
+torch
+matplotlib
+sqlalchemy
+tqdm
+tabulate
+sklearn
