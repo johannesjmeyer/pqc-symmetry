@@ -395,7 +395,7 @@ def cross_entropy_cost_batch(circ, params, games, symmetric, design):
         
         y = torch.zeros(3)
         y[label+1] = 1
-        a = (get_results(result) + 1)/2
+        a = get_results(result)
 
         #a = result
         #slicer = [[0, 2, 4, 6], [8], [1, 3, 5, 7]]
