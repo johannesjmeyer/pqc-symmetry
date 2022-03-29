@@ -538,7 +538,7 @@ class tictactoe():
                 self.gd_cost.append(cost_temp) 
                 self.steps = j
             
-            random.shuffle(self.batch)
+            np.random.shuffle(self.batch)
             self.theta = self.opt.param_groups[0]['params'][0]  
             print(f'epoch {i}/{epochs} accuracy:')
             self.epoch_accuracy.append(self.check_accuracy(check_batch=self.batch))
