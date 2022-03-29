@@ -113,7 +113,7 @@ else:
 ###############################################################
 
 #filename = args.foldername + f'/r-{args.repetitions}_l-{args.layout}_ss-{args.stepsize}_p-{args.points}_n-{args.num_steps}_s-{args.symmetric}_sr-{args.samplerandom}_wr-{args.winsrandom}-TIME{int(time.time())}'
-filename = '-'.join(f'{k}={v}' for k, v in vars(args).items()) + f'-TIME{int(time.time())}'
+filename = args.foldername + '/' + '-'.join(f'{k}={v}' for k, v in vars(args).items()) + f'-TIME{int(time.time())}'
 
 start = timer()
 exp = tictactoe(symmetric=str2bool(args.symmetric), sample_size=args.points, data_file=data_name, design=args.layout, alt_results=str2bool(args.altresult), \

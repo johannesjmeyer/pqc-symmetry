@@ -19,20 +19,11 @@ import torch
 #import jax
 #import jax.numpy as jnp
 
-ttt_dev = qml.device("default.qubit", wires=9) # the device used to label ttt instances
-# TODO: use other device https://pennylane.ai/plugins.html
-# TODO: implement jax https://pennylane.ai/qml/demos/tutorial_jax_transformations.html
-
 ###################################################
 ###################################################
 ###################################################
 args_symmetric = {'c': 2, 'e': 2, 'o': 1, 'm': 2, 'i': 1, 'd': 1}
 args_asymmetric = {'c': 8, 'e': 8, 'o': 8, 'm': 2, 'i': 4, 'd': 4}
-
-
-#if __name__ == '__main__':
-mp.set_start_method("spawn")
-
 
 def data_encoding(game):
     '''
@@ -110,7 +101,7 @@ def outer_layer(param, symm=True):
 
     if symm:
         for i in range(8):
-            qml.CRZ(param, wires=[connections[i], connections[i+1]])
+            qml.CRZ(param[0], wires=[connections[i], connections[i+1]])
 
     else:
         for i in range(8):
@@ -129,7 +120,7 @@ def inner_layer(param, symm=True):
 
     if symm:
         for i in connections:
-            qml.CRZ(param, wires=[4, i])
+            qml.CRZ(param[0], wires=[4, i])
 
     else:
         for n, i in enumerate(connections):
@@ -148,7 +139,7 @@ def diag_layer(param, symm=True):
 
     if symm:
         for i in connections:
-            qml.CRZ(param, wires=[8, i])
+            qml.CRZ(param[0], wires=[8, i])
 
     else:
         for n, i in enumerate(connections):
@@ -283,20 +274,16 @@ def circuit(game, params, symmetric, design="tceocem tceicem tcedcem", alt_resul
                     diag_layer(params[r, args[n]:args[n+1]], symmetric)
 
         if alt_results:
-            #result = {}
-            #print([qml.expval(qml.PauliZ(i)) for i in [0, 2, 4, 6]])
-            #result['-1'] = ([qml.expval(qml.PauliZ(i)) for i in [0, 2, 4, 6]]) # measure corners for
-            #result['1'] = ([qml.expval(qml.PauliZ(i)) for i in [1, 3, 5, 7]])
-            #result['0'] = qml.expval(qml.PauliZ(8))
             return [qml.expval(qml.PauliZ(i)) for i in range(9)]
         else:
             return qml.expval(qml.PauliZ(8)) # measure one qubit in comp basis
 
+#ttt_dev = qml.device("default.qubit", wires=9) # the device used to label ttt instances 
+ttt_dev = qml.device("lightning.qubit", wires=9) # ligthing.qubit is an optimized version of default.qubit
+# TODO: use other device https://pennylane.ai/plugins.html
 
 full_circ = qml.QNode(circuit, ttt_dev)
-full_circ_torch = qml.QNode(circuit, ttt_dev, interface='torch') # diff_method="adjoint" is supoosed to limit RAM usage
-#full_circ_jax = qml.QNode(circuit, ttt_dev, interface='jax')
-#full_circ = jax.jit(full_circ_jax)
+full_circ_torch = qml.QNode(circuit, ttt_dev, interface='torch', diff_method="adjoint")# is supoosed to limit RAM usage
 
 ###################################################
 ###################################################
@@ -304,8 +291,6 @@ full_circ_torch = qml.QNode(circuit, ttt_dev, interface='torch') # diff_method="
 
 
 rng = np.random.default_rng(2021)
-
-#TODO train something on a few labelled data!
 
 ############################
 
@@ -318,7 +303,6 @@ def random_params(repetitions, symmetric, design, enable_torch=False):
         return torch.tensor(params, requires_grad = True)
     else: 
         return np.array(params, requires_grad = True)
-
 
 def cost_function(circ, params,game, symmetric, design):
     return (circ(game,params, symmetric, design=design)-get_label(game))**2
@@ -347,42 +331,21 @@ def cost_function_alt(circ, params, game, symmetric, design="tceocem tceicem tce
     
     return np.sum(avg_result)
 
-
-def parallelized_cost_function(game, circ, params, symmetric, design):
-
-    result = circ(game ,params, symmetric, design=design, alt_results=True)
-    label = get_label(game)
-    print('test')
-    won = torch.zeros(3)
-    won[label+1] = 1
-
-    avg_result = get_results(result)
-
-    return torch.sum((avg_result - won)**2)
-
-def cost_function_alt_batch(circ, params, games, symmetric, design="tceocem tceicem tcedcem", parallelize=False):
+def cost_function_alt_batch(circ, params, games, symmetric, design="tceocem tceicem tcedcem"):
     
-    if parallelize:
-        process_pool = Pool()
-        #data = [(g, circ, params, symmetric, design) for g in games]
-        #final_results = torch.tensor(process_pool.starmap(parallelized_cost_function, data))
-        #para = lambda g: parallelized_cost_function(g, circ, params, symmetric, design)
-        para = partial(parallelized_cost_function,  circ=circ, params=params, symmetric=symmetric, design=design)
-        final_results = process_pool.map(para, games)
-    else:
-        final_results = torch.zeros(len(games))
-        for i, g in enumerate(games):  # TODO: implement multiprocessing with pool here
+    final_results = torch.zeros(len(games))
+    for i, g in enumerate(games):  # TODO: implement multiprocessing with pool here
 
-            result = circ(g,params, symmetric, design=design, alt_results=True)#.detach().numpy()
-            label = get_label(g)
-            
-            won = torch.zeros(3)
-            won[label+1] = 1
+        result = circ(g,params, symmetric, design=design, alt_results=True)
+        label = get_label(g)
+        
+        won = torch.zeros(3)
+        won[label+1] = 1
 
-            avg_result = get_results(result)
+        avg_result = get_results(result)
 
-            final_results[i] = torch.sum((avg_result - won)**2)
-    
+        final_results[i] = torch.sum((avg_result - won)**2)
+
     return torch.mean(final_results)
 
 def cross_entropy_cost_batch(circ, params, games, symmetric, design):
@@ -390,7 +353,7 @@ def cross_entropy_cost_batch(circ, params, games, symmetric, design):
     cost_vector = torch.zeros(len(games))
     for i, g in enumerate(games):
 
-        result = (circ(g,params, symmetric, design=design, alt_results=True) + 1)/2
+        result = circ(g,params, symmetric, design=design, alt_results=True)
         label = get_label(g)
         
         y = torch.zeros(3)
@@ -406,35 +369,17 @@ def cross_entropy_cost_batch(circ, params, games, symmetric, design):
 
     return -torch.mean(cost_vector)
 
-def cost_function_alt_batch_old(circ, params, games, symmetric, design="tceocem tceicem tcedcem"):
-    
-    slicer = [[0, 2, 4, 6], [8], [1, 3, 5, 7]]
-    final_results = []
-
-    for g in games:
-
-        result = circ(g,params, symmetric, design=design, alt_results=True)
-        label = get_label(g)
-       
-        
-        won = np.zeros(3)
-        won[label+1] = 1
-
-        avg_result = []
-        for i in np.array([-1, 0, 1])+1:
-            avg_result.append((np.average(result[slicer[i]]) - won[i])**2)
-        
-        final_results.append(np.sum(avg_result))
-    
-    return np.average(final_results)
-
 def get_results(result):
     avg_result = []
     slicer = [[0, 2, 4, 6], [8], [1, 3, 5, 7]]
     for i in np.array([-1, 0, 1])+1:
         avg_result.append(torch.mean(result[slicer[i]]).reshape(1))
 
-    result = torch.cat(avg_result)
+    result = (torch.cat(avg_result) + 1)/2
+    #logistic layer
+    #result = torch.exp(a) 
+    #result = result/torch.linalg.norm(result)
+
     return result
 
 games_data,labels = get_data()
@@ -480,7 +425,7 @@ def gen_games_sample(size, wins=[1, 0, -1], output = None, reduced=False, truesi
 class tictactoe():
 
     def __init__(self, symmetric=True, sample_size=5, design="tceocem tceicem tcedcem", data_file=None, alt_results=True, random_sample=False, random_wins = False, reduced = False, cross_entropy = False):
-        #self.opt = qml.GradientDescentOptimizer(0.01)
+
         self.sample_size = sample_size
         self.design = design
         self.alt_results = alt_results
@@ -490,15 +435,13 @@ class tictactoe():
         self.epochs = False
 
         if cross_entropy:
-            print('cross entropy')
+            print('using cross entropy cost function...')
             self.cost_function = cross_entropy_cost_batch
         elif alt_results:
-            print('mean squared')
+            print('using mean squared cost function...')
             self.cost_function = cost_function_alt_batch
-            #self.cost_function_torch = cost_function_alt_batch_torch
         else:
             self.cost_function = cost_function_batch
-            #self.cost_function_torch = cost_function_batch_torch
 
         if data_file is None:
             self.sample_games(sample_size)
@@ -705,8 +648,6 @@ class tictactoe():
 
                 res_circ.append(avg_results.detach().numpy())
 
-                #results_alt[res_true[i]].append(avg_results) # TODO causes memory build up
-
             else:
                 if self.interface == 'torch':
                     res_device = round(float(full_circ_torch(game, self.theta, self.symmetric, design=self.design)), 3)
@@ -731,9 +672,6 @@ class tictactoe():
             self.accuracy = self.confusion_matrix.trace()/3
             print('Confusion matrix:')
             print(self.confusion_matrix)
-            #self.accuracy[-1] = len([j for j in results_alt[-1] if j[0] > j[1] and j[0] > j[2]])/len(results_alt[-1])
-            #self.accuracy[0] = len([j for j in results_alt[0] if j[1] > j[0] and j[1] > j[2]])/len(results_alt[0])
-            #self.accuracy[1] = len([j for j in results_alt[1] if j[2] > j[1] and j[2] > j[0]])/len(results_alt[1])
 
             return self.confusion_matrix
             
@@ -779,4 +717,5 @@ class tictactoe():
 # TODO: run on cloud/cluster
 # TODO: try different circuits
 
+# %%
 # %%
