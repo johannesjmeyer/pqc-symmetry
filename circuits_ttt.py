@@ -283,13 +283,13 @@ def circuit(game, params, symmetric, design="tceocem tceicem tcedcem", alt_resul
         else:
             return qml.expval(qml.PauliZ(8)) # measure one qubit in comp basis
 
-ttt_dev = qml.device("default.qubit", wires=9) # the device used to label ttt instances 
-#ttt_dev = qml.device("lightning.qubit", wires=9) # ligthing.qubit is an optimized version of default.qubit
+#ttt_dev = qml.device("default.qubit", wires=9) # the device used to label ttt instances 
+ttt_dev = qml.device("lightning.qubit", wires=9) # ligthing.qubit is an optimized version of default.qubit
 # TODO: use other device https://pennylane.ai/plugins.html
 
 full_circ = qml.QNode(circuit, ttt_dev)
-#full_circ_torch = qml.QNode(circuit, ttt_dev, interface='torch', diff_method="adjoint")# is supoosed to limit RAM usage
-full_circ_torch = qml.QNode(circuit, ttt_dev, interface='torch')
+full_circ_torch = qml.QNode(circuit, ttt_dev, interface='torch', diff_method="adjoint")# is supoosed to limit RAM usage
+#full_circ_torch = qml.QNode(circuit, ttt_dev, interface='torch')
 
 ###################################################
 ###################################################
