@@ -283,12 +283,13 @@ def circuit(game, params, symmetric, design="tceocem tceicem tcedcem", alt_resul
         else:
             return qml.expval(qml.PauliZ(8)) # measure one qubit in comp basis
 
-#ttt_dev = qml.device("default.qubit", wires=9) # the device used to label ttt instances 
-ttt_dev = qml.device("lightning.qubit", wires=9) # ligthing.qubit is an optimized version of default.qubit
+ttt_dev = qml.device("default.qubit", wires=9) # the device used to label ttt instances 
+#ttt_dev = qml.device("lightning.qubit", wires=9) # ligthing.qubit is an optimized version of default.qubit
 # TODO: use other device https://pennylane.ai/plugins.html
 
 full_circ = qml.QNode(circuit, ttt_dev)
-full_circ_torch = qml.QNode(circuit, ttt_dev, interface='torch', diff_method="adjoint")# is supoosed to limit RAM usage
+#full_circ_torch = qml.QNode(circuit, ttt_dev, interface='torch', diff_method="adjoint")# is supoosed to limit RAM usage
+full_circ_torch = qml.QNode(circuit, ttt_dev, interface='torch')
 
 ###################################################
 ###################################################
@@ -355,6 +356,17 @@ def cost_function_alt_batch(circ, params, games, symmetric, design="tceocem tcei
 
 def cross_entropy_cost_batch(circ, params, games, symmetric, design):
 
+    loss = torch.nn.CrossEntropyLoss()
+    input = torch.zeros((len(games), 3))
+    target = torch.zeros(len(games), dtype=torch.long)
+    for i, g in enumerate(games):
+        result = circ(g,params, symmetric, design=design, alt_results=True)
+        input[i] = get_results_no_normalizing(result)
+        target[i] = int(get_label(g) + 1)
+
+    return loss(input, target)
+
+    """"
     cost_vector = torch.zeros(len(games))
     for i, g in enumerate(games):
 
@@ -373,6 +385,20 @@ def cross_entropy_cost_batch(circ, params, games, symmetric, design):
         cost_vector[i] = torch.sum(y*torch.log(a)+(1-y)*torch.log(1-a))
 
     return -torch.mean(cost_vector)
+    """
+
+def get_results_no_normalizing(result):
+    avg_result = []
+    slicer = [[0, 2, 4, 6], [8], [1, 3, 5, 7]]
+    for i in np.array([-1, 0, 1])+1:
+        avg_result.append(torch.mean(result[slicer[i]]).reshape(1))
+
+    result = torch.cat(avg_result)
+    #logistic layer
+    #result = torch.exp(a) 
+    #result = result/torch.linalg.norm(result)
+
+    return result
 
 def get_results(result):
     avg_result = []
