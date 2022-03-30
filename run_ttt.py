@@ -90,6 +90,9 @@ parser.add_argument('-epn', "--epochssize", type=int, default = 10,
 parser.add_argument('-ce', "--crossentropy", type=str, default = 'false',
                     help='use cross entropy cost function') 
 
+parser.add_argument('-epm', "--epochmult", type=float, default = 1.,
+                    help='how many times to repeat data inside the epoch batch. Can be float.') 
+
 args = parser.parse_args()
 
 
@@ -122,7 +125,7 @@ exp = tictactoe(symmetric=str2bool(args.symmetric), sample_size=args.points, dat
 # TODO from here, each each step seems to take forever. I am not sure whether it's my pennylane installation or whether I did something stupid (Fra)
 exp.random_parameters(1, repetitions=args.repetitions) # select best of 20 random points as starting point
 if str2bool(args.epochs):
-    exp.run_epochs(args.epochssize, args.points, args.num_steps, args.stepsize, data_name)
+    exp.run_epochs(args.epochssize, args.points, args.num_steps, args.stepsize, args.epochmult, data_name)
 elif str2bool(args.lbfgs):
     exp.run_lbgfs(args.num_steps, args.stepsize)
 else:

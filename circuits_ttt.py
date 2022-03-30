@@ -25,6 +25,11 @@ import torch
 args_symmetric = {'c': 2, 'e': 2, 'o': 1, 'm': 2, 'i': 1, 'd': 1}
 args_asymmetric = {'c': 8, 'e': 8, 'o': 8, 'm': 2, 'i': 4, 'd': 4}
 
+test_var = 0
+#if __name__ == '__main__':
+#mp.set_start_method("spawn")
+
+
 def data_encoding(game):
     '''
     loops through game array, applies RX(game[i]) on wire i
@@ -493,13 +498,22 @@ class tictactoe():
             self.sample_games(size)
 
 
-    def run_epochs(self, epochs, samplesize_per_step, steps_per_epoch, stepsize, data_file = None):
+    def run_epochs(self, epochs, samplesize_per_step, steps_per_epoch, stepsize, multiplicator=1, data_file = None):
         """
         Runs lbfgs training with different epochs
         """
         self.epochs = True
         if data_file is None:
-            self.batch = gen_games_sample(steps_per_epoch*samplesize_per_step, truesize=True, reduced = self.reduced)[0]
+            if multiplicator == 1:
+                self.batch = gen_games_sample(steps_per_epoch*samplesize_per_step, truesize=True, reduced = self.reduced)[0]
+            else:
+                games_per_batch = int(np.ceil(steps_per_epoch*samplesize_per_step / multiplicator))
+                batch = gen_games_sample(games_per_batch, truesize=True, reduced = self.reduced)[0]
+                self.batch = batch
+                for i in range(int(np.ceil(multiplicator))):
+                    self.batch = np.append(self.batch, batch, axis=0)
+                np.random.shuffle(self.batch)
+                self.batch = self.batch[:steps_per_epoch*samplesize_per_step]
         else:
             with open('samples/'+data_file+'.npz', 'rb') as f:
                             print('Loading data file \n')
@@ -539,6 +553,7 @@ class tictactoe():
                 self.steps = j
             
             np.random.shuffle(self.batch)
+            print(f'unique games: {len(np.unique(self.batch, axis=0))}')
             self.theta = self.opt.param_groups[0]['params'][0]  
             print(f'epoch {i}/{epochs} accuracy:')
             self.epoch_accuracy.append(self.check_accuracy(check_batch=self.batch))
