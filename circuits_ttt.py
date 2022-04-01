@@ -125,11 +125,11 @@ def inner_layer(param, symm=True):
 
     if symm:
         for i in connections:
-            qml.CRZ(param[0], wires=[4, i])
+            qml.CRZ(param[0], wires=[8, i])
 
     else:
         for n, i in enumerate(connections):
-            qml.CRZ(param[n], wires=[4, i])    
+            qml.CRZ(param[n], wires=[8, i])    
   
 def diag_layer(param, symm=True):
     '''
@@ -151,6 +151,11 @@ def diag_layer(param, symm=True):
             qml.CRZ(param[n], wires=[8, i])       
 
 ### Non symmetric functions ###
+
+
+#############################################
+# following is obsolete #####################
+
 def data_encoding_old(game):
     '''
     loops through game array, applies RX(game[i]) on wire i
@@ -180,6 +185,9 @@ def column_layer(params):
     for col in range(3):
         for row in range(2):
             qml.CRZ(params[2*row+col],wires=[3*col+row,3*col+row+1])
+
+##### until here ##################################
+###################################################
 
 
 def translate_to_parameters(design, symmetric=True):
@@ -258,7 +266,7 @@ def circuit(game, params, symmetric, design="tceocem tceicem tcedcem", alt_resul
         # TODO: this should automatically start from the all-zero state in comp basis right?
 
         args = translate_to_parameters(design, symmetric)
-        ngame = np.pi*0.5*game # normalize entries of game so they are between -pi/2, pi/2
+        ngame = np.pi*game  # normalize entries of game so they are between -pi/2, pi/2 # used to be np.pi*0.5*game
 
         for r in range(params.shape[0]): # r repetitions
 
@@ -388,6 +396,8 @@ def cross_entropy_cost_batch(circ, params, games, symmetric, design):
     """
 
 def get_results_no_normalizing(result):
+    '''takes 9 qubits exp values and averages edges (4q)/corners (4q)/center (1q), returns 3d vector'''
+    # THIS SHOULD ALREADY BE GOOD FOR TORCH (CE)
     avg_result = []
     slicer = [[0, 2, 4, 6], [8], [1, 3, 5, 7]]
     for i in np.array([-1, 0, 1])+1:
@@ -401,6 +411,7 @@ def get_results_no_normalizing(result):
     return result
 
 def get_results(result):
+    '''same as above but normalized to [0,1]'''
     avg_result = []
     slicer = [[0, 2, 4, 6], [8], [1, 3, 5, 7]]
     for i in np.array([-1, 0, 1])+1:
@@ -619,11 +630,11 @@ class tictactoe():
         #print(self.gd_cost)
         #print(self.theta)
 
-    def run_lbgfs(self, steps, stepsize=0.1, resume = False):
+    def run_lbfgs(self, steps, stepsize=0.1, resume = False):
         '''
         Runs qml with torch's lbfgs implementation. Usually converges much quicker than pennylanes standard gradient descent optimizer
         '''
-        print('running lbgfs...')
+        print('running lbfgs...')
         print(tabulate([['steps', steps], ['stepsize', stepsize], ['symmetric', self.symmetric], ['design', self.design], ['sample size', 3*self.sample_size], \
             ['random sample', self.random], ['repetitions', self.repetitions]]))
 

@@ -51,19 +51,19 @@ parser.add_argument('-p', "--points", type=int, default = 6,
 # circuit design          
 parser.add_argument('-l', "--layout", type=str, default = 'tcemoid',
                     help='string specifying order of encoding layers: \
-                    \n t: encode game \
-                    \n c: corners \
-                    \n e: edges \
-                    \n m: middle/center \
-                    \n o: outer layer \
-                    \n i: inner layer  \
-                    \nd: diagonal layer') 
+                    \n t: encode game -- data encoding\
+                    \n c: corners -- 1q trainable \
+                    \n e: edges -- 1q trainable\
+                    \n m: middle/center -- 1q trainable\
+                    \n o: outer layer -- 2q trainable\
+                    \n i: inner layer  -- 2q trainable\
+                    \nd: diagonal layer -- 2q trainable') 
                 
 
 parser.add_argument('-f', "--foldername", type=str, default = 'output',
                     help='filename to save') 
 
-parser.add_argument('-lb', "--lbfgs", type=str, default = 'true',
+parser.add_argument('-lb', "--lbfgs", type=str, default = 'true', # epochs only implemented with lbfgs
                     help='Use torches lbfgs implementation') 
 
 parser.add_argument('-ss', "--stepsize", type=float, default = 0.008,
@@ -72,7 +72,7 @@ parser.add_argument('-ss', "--stepsize", type=float, default = 0.008,
 parser.add_argument('-r', "--altresult", type=str, default = 'true',
                     help='if false, encode result in single qubit \n if true, encode result in grid.  ') 
 
-parser.add_argument('-sr', "--samplerandom", type=str, default = 'false',
+parser.add_argument('-sr', "--samplerandom", type=str, default = 'false', # not implemented for epochs
                     help='if true, pick new random games for each step') 
 
 parser.add_argument('-wr', "--winsrandom", type=str, default = 'false',
@@ -84,7 +84,7 @@ parser.add_argument('-re', "--repetitions", type=int, default = 7,
 parser.add_argument('-ep', "--epochs", type=str, default = 'true',
                     help='uses epochs') 
 
-parser.add_argument('-epn', "--epochssize", type=int, default = 10,
+parser.add_argument('-epn', "--epochssize", type=int, default = 10, # actually specifies how many epochs there will be
                     help='number of epochs') 
 
 parser.add_argument('-ce', "--crossentropy", type=str, default = 'false',
@@ -99,7 +99,6 @@ args = parser.parse_args()
 ###############################################################
 ############## produce data (mostly useful for debugging)
 ###############################################################
-print('1\n')
 if args.data == 'None':
     data_name = None
 else:
@@ -127,7 +126,7 @@ exp.random_parameters(1, repetitions=args.repetitions) # select best of 20 rando
 if str2bool(args.epochs):
     exp.run_epochs(args.epochssize, args.points, args.num_steps, args.stepsize, args.epochmult, data_name)
 elif str2bool(args.lbfgs):
-    exp.run_lbgfs(args.num_steps, args.stepsize)
+    exp.run_lbfgs(args.num_steps, args.stepsize)
 else:
     exp.run(args.num_steps)
     
