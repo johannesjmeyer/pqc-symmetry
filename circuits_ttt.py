@@ -107,10 +107,12 @@ def outer_layer(param, symm=True):
     if symm:
         for i in range(8):
             qml.CRZ(param[0], wires=[connections[i], connections[i+1]])
+            qml.CRZ(-param[0], wires=[connections[i+1], connections[i]])
 
     else:
         for i in range(8):
             qml.CRZ(param[i], wires=[connections[i], connections[i+1]])
+            qml.CRZ(-param[i], wires=[connections[i+1], connections[i]])
 
 def inner_layer(param, symm=True):
     '''
@@ -126,10 +128,12 @@ def inner_layer(param, symm=True):
     if symm:
         for i in connections:
             qml.CRZ(param[0], wires=[8, i])
+            qml.CRZ(-param[0], wires=[i, 8])
 
     else:
         for n, i in enumerate(connections):
             qml.CRZ(param[n], wires=[8, i])    
+            qml.CRZ(-param[n], wires=[i, 8])    
   
 def diag_layer(param, symm=True):
     '''
@@ -145,10 +149,12 @@ def diag_layer(param, symm=True):
     if symm:
         for i in connections:
             qml.CRZ(param[0], wires=[8, i])
+            qml.CRZ(-param[0], wires=[i, 8])
 
     else:
         for n, i in enumerate(connections):
-            qml.CRZ(param[n], wires=[8, i])       
+            qml.CRZ(param[n], wires=[8, i])
+            qml.CRZ(-param[n], wires=[i, 8])
 
 ### Non symmetric functions ###
 
