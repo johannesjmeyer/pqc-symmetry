@@ -75,9 +75,12 @@ parser.add_argument('-r', "--altresult", type=str, default = 'true',
 parser.add_argument('-sr', "--samplerandom", type=str, default = 'false', # not implemented for epochs
                     help='if true, pick new random games for each step') 
 
-parser.add_argument('-wr', "--winsrandom", type=str, default = 'false',
-                    help='if true, chooses games randomly without even distribution of wins') 
+parser.add_argument('-w', "--wins", type=str, default = '-1 0 1',
+                    help='wins to include in dataset. Seperate numbers with a space e.g. only including wins for -1 and 0 would look like "-1 0". For completely random games set to "R"') 
 
+parser.add_argument('-es', "--excludesymmetry", type=str, default = 'false',
+                    help='if true, uses reduced dataset only keeps one game per symmetry group') 
+                    
 parser.add_argument('-re', "--repetitions", type=int, default = 7,
                     help='how many times to repeat layout') 
 
@@ -94,8 +97,6 @@ parser.add_argument('-epm', "--epochmult", type=float, default = 1.,
                     help='how many times to repeat data inside the epoch batch. Can be float.') 
 
 args = parser.parse_args()
-
-
 ###############################################################
 ############## produce data (mostly useful for debugging)
 ###############################################################
@@ -115,11 +116,16 @@ else:
 ###############################################################
 
 #filename = args.foldername + f'/r-{args.repetitions}_l-{args.layout}_ss-{args.stepsize}_p-{args.points}_n-{args.num_steps}_s-{args.symmetric}_sr-{args.samplerandom}_wr-{args.winsrandom}-TIME{int(time.time())}'
-filename = args.foldername + '/' + '-'.join(f'{k}={v}' for k, v in vars(args).items()) + f'-TIME{int(time.time())}' + '-'+str(np.random.uniform())
+filename = args.foldername + '/' + '-'.join(f'{k}={v}' for k, v in vars(args).items()) + f'-TIME{int(time.time())}' + '-'+str(round(np.random.uniform(), 3))
+
+if 'R' in args.wins:
+    wins=[]
+else:
+    wins = [int(i) for i in args.wins.split(' ')]
 
 start = timer()
 exp = tictactoe(symmetric=str2bool(args.symmetric), sample_size=args.points, data_file=data_name, design=args.layout, alt_results=str2bool(args.altresult), \
-    random_sample=str2bool(args.samplerandom), random_wins=str2bool(args.winsrandom), cross_entropy=str2bool(args.crossentropy))
+    random_sample=str2bool(args.samplerandom), wins=wins, reduced=str2bool(args.excludesymmetry), cross_entropy=str2bool(args.crossentropy))
 
 # TODO from here, each each step seems to take forever. I am not sure whether it's my pennylane installation or whether I did something stupid (Fra)
 exp.random_parameters(1, repetitions=args.repetitions) # select best of 20 random points as starting point

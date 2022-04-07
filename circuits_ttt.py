@@ -451,17 +451,20 @@ def gen_games_sample(size, wins=[1, 0, -1], output = None, reduced=False, truesi
         data_labels = labels
     if wins:
         if truesize:
-            for i in range(size):
-                sample += [random.choice([a for k, a in enumerate(data) if data_labels[k] == i%len(wins)-1])]
-                sample_label += [i%len(wins)-1]
+            partial_size = int(np.ceil(size/(len(wins))))
+            for j in wins:
+                sample += list(rng.choice(data[data_labels == j], partial_size,replace=False))
+                sample_label += partial_size*[j]
+
+            sample = sample[:size]
+            sample_label = sample_label[:size]
         else:
             for j in wins:
-                sample += random.sample([a for k, a in enumerate(data) if data_labels[k] == j], size)
+                sample += list(rng.choice(data[data_labels == j], size, replace=False))
                 sample_label += size*[j]
     else:
-        sample += random.sample(list(data), size)
+        sample += list(rng.choice(data, size,replace=False))
         sample_label = [get_label(g) for g in sample]
-        #sample_label += size*[j]
         
     if not output == None:
         with open('samples/'+output+'.npz', 'wb') as f:
@@ -472,13 +475,13 @@ def gen_games_sample(size, wins=[1, 0, -1], output = None, reduced=False, truesi
 
 class tictactoe():
 
-    def __init__(self, symmetric=True, sample_size=5, design="tceocem tceicem tcedcem", data_file=None, alt_results=True, random_sample=False, random_wins = False, reduced = False, cross_entropy = False):
+    def __init__(self, symmetric=True, sample_size=5, design="tceocem tceicem tcedcem", data_file=None, alt_results=True, random_sample=False, wins = [-1, 0, 1], reduced = False, cross_entropy = False):
 
         self.sample_size = sample_size
         self.design = design
         self.alt_results = alt_results
         self.random = random_sample
-        self.random_wins = random_wins
+        self.wins = wins
         self.reduced = reduced
         self.epochs = False
 
@@ -519,11 +522,7 @@ class tictactoe():
         '''
         Create random samples with equal amount of wins for X, O and 0
         '''
-        if self.random_wins:
-            wins = []
-        else:
-            wins = [-1, 0, 1]
-        self.games_sample , self.label_sample = gen_games_sample(size, wins=wins, reduced = self.reduced)
+        self.games_sample , self.label_sample = gen_games_sample(size, wins=self.wins, reduced = self.reduced)
 
     def load_games(self, data_file, size):
         '''
@@ -545,13 +544,17 @@ class tictactoe():
         """
         Runs lbfgs training with different epochs
         """
+        print('running epochs...')
+        print(tabulate([['epochs', epochs], ['stepsize', stepsize], ['symmetric', self.symmetric], ['design', self.design], ['sample size per step', samplesize_per_step], ['steps per epoch', steps_per_epoch], \
+            ['wins', self.wins], ['repetitions', self.repetitions]]))
+
         self.epochs = True
         if data_file is None:
             if multiplicator == 1:
-                self.batch = gen_games_sample(steps_per_epoch*samplesize_per_step, truesize=True, reduced = self.reduced)[0]
+                self.batch = gen_games_sample(steps_per_epoch*samplesize_per_step, truesize=True, reduced = self.reduced, wins=self.wins)[0]
             else:
                 games_per_batch = int(np.ceil(steps_per_epoch*samplesize_per_step / multiplicator))
-                batch = gen_games_sample(games_per_batch, truesize=True, reduced = self.reduced)[0]
+                batch = gen_games_sample(games_per_batch, truesize=True, reduced = self.reduced, wins=self.wins)[0]
                 self.batch = batch
                 for i in range(int(np.ceil(multiplicator))):
                     self.batch = np.append(self.batch, batch, axis=0)
@@ -561,6 +564,8 @@ class tictactoe():
             with open('samples/'+data_file+'.npz', 'rb') as f:
                             print('Loading data file \n')
                             self.batch = np.tensor(np.load(f, allow_pickle = True)['sample'], requires_grad=False)
+
+        np.random.shuffle(self.batch)
 
         self.interface = 'torch'
 
@@ -641,8 +646,8 @@ class tictactoe():
         Runs qml with torch's lbfgs implementation. Usually converges much quicker than pennylanes standard gradient descent optimizer
         '''
         print('running lbfgs...')
-        print(tabulate([['steps', steps], ['stepsize', stepsize], ['symmetric', self.symmetric], ['design', self.design], ['sample size', 3*self.sample_size], \
-            ['random sample', self.random], ['repetitions', self.repetitions]]))
+        print(tabulate([['steps', steps], ['stepsize', stepsize], ['symmetric', self.symmetric], ['design', self.design], ['sample size', len(self.games_sample)], \
+            ['random sample', self.random], ['repetitions', self.repetitions], ['wins', self.wins]]))
 
         self.interface = 'torch'
         if not resume:
@@ -676,7 +681,8 @@ class tictactoe():
         
         cost_temp = self.cost_function(full_circ_torch ,self.opt.param_groups[0]['params'][0],self.games_sample, self.symmetric, self.design)
         print(f"final step current cost value: {cost_temp}")
-
+        print('accuracy on training data set:')
+        self.check_accuracy(check_batch=self.games_sample)
         self.theta = self.opt.param_groups[0]['params'][0]  
             
     def check_accuracy(self, check_size = 100, check_batch = None): # TODO: check if accuracy varies for same run
@@ -685,7 +691,7 @@ class tictactoe():
         checks accuracy of current theta by sampling check_size amount of games for each win
         '''
         if check_batch is None:
-            games_check, labels_check = gen_games_sample(check_size)
+            games_check, labels_check = gen_games_sample(check_size, wins=self.wins)
         else: 
             games_check = check_batch
             labels_check = np.tensor([get_label(i) for i in check_batch])
