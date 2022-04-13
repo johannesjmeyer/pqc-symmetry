@@ -106,7 +106,6 @@ def outer_layer(param, symm=True):
 
     if symm:
         for i in range(4):
-            print(gate_2q)
             gate_2q(param[0], wires=[corners[i], edges[i]])
             gate_2q(param[0], wires=[corners[i], edges[i-1]])
     else:
