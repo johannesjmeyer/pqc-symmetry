@@ -98,7 +98,12 @@ parser.add_argument('-epm', "--epochmult", type=float, default = 1.,
                     help='how many times to repeat data inside the epoch batch. Can be float.') 
         
 parser.add_argument('-cg', "--controlgate", type=str, default = 'x',
-                    help='Use CRX gate to entangle qubits instead of CRZ') 
+                    help='Use different gate: \
+                        "x": CNOT \
+                        "z": CZ \
+                        "crx": CRX \
+                        "crz": CRZ \
+                        "cry": CRY') 
 
 args = parser.parse_args()
 ###############################################################
@@ -115,12 +120,31 @@ else:
             gen_games_sample(args.points, output = args.data) # create data file with specified name and size (# of points)
     data_name = args.data
 
-if args.controlgate == 'x':
+if args.controlgate == 'rx':
+    circuits_ttt.rotation_2q = True
     circuits_ttt.gate_2q = qml.CRX
-elif args.controlgate == 'z':
+    circuits_ttt.args_symmetric = {'c': 2, 'e': 2, 'o': 1, 'm': 2, 'i': 1, 'd': 1}
+    circuits_ttt.args_asymmetric = {'c': 8, 'e': 8, 'o': 8, 'm': 2, 'i': 4, 'd': 4}
+elif args.controlgate == 'rz':
+    circuits_ttt.rotation_2q = True
     circuits_ttt.gate_2q = qml.CRZ
-elif args.controlgate == 'y':
+    circuits_ttt.args_symmetric = {'c': 2, 'e': 2, 'o': 1, 'm': 2, 'i': 1, 'd': 1}
+    circuits_ttt.args_asymmetric = {'c': 8, 'e': 8, 'o': 8, 'm': 2, 'i': 4, 'd': 4}
+elif args.controlgate == 'ry':
+    circuits_ttt.rotation_2q = True
     circuits_ttt.gate_2q = qml.CRY
+    circuits_ttt.args_symmetric = {'c': 2, 'e': 2, 'o': 1, 'm': 2, 'i': 1, 'd': 1}
+    circuits_ttt.args_asymmetric = {'c': 8, 'e': 8, 'o': 8, 'm': 2, 'i': 4, 'd': 4}
+elif args.controlgate == 'x':
+    circuits_ttt.rotation_2q = False
+    circuits_ttt.gate_2q = qml.CNOT
+    circuits_ttt.args_symmetric = {'c': 2, 'e': 2, 'o': 0, 'm': 2, 'i': 0, 'd': 0}
+    circuits_ttt.args_asymmetric = {'c': 8, 'e': 8, 'o': 0, 'm': 2, 'i': 0, 'd': 0}
+elif args.controlgate == 'z':
+    circuits_ttt.rotation_2q = False
+    circuits_ttt.gate_2q = qml.CZ
+    circuits_ttt.args_symmetric = {'c': 2, 'e': 2, 'o': 0, 'm': 2, 'i': 0, 'd': 0}
+    circuits_ttt.args_asymmetric = {'c': 8, 'e': 8, 'o': 0, 'm': 2, 'i': 0, 'd': 0}
 else:
     raise TypeError
 ###############################################################

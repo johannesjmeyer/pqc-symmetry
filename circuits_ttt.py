@@ -23,10 +23,12 @@ import torch
 ###################################################
 ###################################################
 ###################################################
-args_symmetric = {'c': 2, 'e': 2, 'o': 1, 'm': 2, 'i': 1, 'd': 1}
-args_asymmetric = {'c': 8, 'e': 8, 'o': 8, 'm': 2, 'i': 4, 'd': 4}
+
 if __name__ == "__main__":
+    args_symmetric = {'c': 2, 'e': 2, 'o': 1, 'm': 2, 'i': 1, 'd': 1}
+    args_asymmetric = {'c': 8, 'e': 8, 'o': 8, 'm': 2, 'i': 4, 'd': 4}
     gate_2q = qml.CRX
+    rotation_2q = True
 
 def data_encoding(game):
     '''
@@ -103,15 +105,19 @@ def outer_layer(param, symm=True):
     """"""
     corners = [0, 2, 4, 6]
     edges = [1, 3, 5, 7]
-
-    if symm:
-        for i in range(4):
-            gate_2q(param[0], wires=[corners[i], edges[i]])
-            gate_2q(param[0], wires=[corners[i], edges[i-1]])
+    if rotation_2q:
+        if symm:
+            for i in range(4):
+                    gate_2q(param[0], wires=[corners[i], edges[i]])
+                    gate_2q(param[0], wires=[corners[i], edges[i-1]])
+        else:
+            for i in range(4):
+                    gate_2q(param[2*i], wires=[corners[i], edges[i]])
+                    gate_2q(param[2*i+1], wires=[corners[i], edges[i-1]])
     else:
         for i in range(4):
-            gate_2q(param[2*i], wires=[corners[i], edges[i]])
-            gate_2q(param[2*i+1], wires=[corners[i], edges[i-1]])
+            gate_2q(wires=[corners[i], edges[i]])
+            gate_2q(wires=[corners[i], edges[i-1]])      
 
     """
     connections = list(range(8)) + [0] 
@@ -136,12 +142,16 @@ def inner_layer(param, symm=True):
     6    5    4
     '''
     edges = [1, 3, 5, 7]
-    if symm:
-        for i in edges:
-            gate_2q(param[0], wires=[i, 8])
+    if rotation_2q:
+        if symm:
+            for i in edges:
+                gate_2q(param[0], wires=[i, 8])
+        else:
+            for i in edges:
+                gate_2q(param[i], wires=[i, 8])
     else:
         for i in edges:
-            gate_2q(param[i], wires=[i, 8])
+            gate_2q(wires=[i, 8]) 
     """
     if symm:
         for i in connections:
@@ -164,12 +174,17 @@ def diag_layer(param, symm=True):
     6    5    4
     '''
     corners = [0, 2, 4, 6]
-    if symm:
-        for i in corners:
-            gate_2q(param[0], wires=[8, i])
+    if rotation_2q:
+        if symm:
+            for i in corners:
+                gate_2q(param[0], wires=[8, i])
+        else:
+            for i in corners:
+                gate_2q(param[i], wires=[8, i])
     else:
         for i in corners:
-            gate_2q(param[i], wires=[8, i])
+            gate_2q(wires=[8, i])
+
     """
     if symm:
         for i in connections:
