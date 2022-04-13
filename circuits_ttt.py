@@ -591,6 +591,8 @@ class tictactoe():
                             print('Loading data file \n')
                             self.batch = np.tensor(np.load(f, allow_pickle = True)['sample'], requires_grad=False)
 
+        self.test_batch = gen_games_sample(600, truesize=True, reduced = self.reduced, wins=self.wins)[0]
+
         np.random.shuffle(self.batch)
 
         self.interface = 'torch'
@@ -634,7 +636,7 @@ class tictactoe():
             print(f'epoch {i}/{epochs} accuracy:')
             self.epoch_accuracy.append(self.check_accuracy(check_batch=self.batch))
             print(f'epoch {i}/{epochs} total accuracy:')
-            self.epoch_total_accuracy.append(self.check_accuracy())
+            self.epoch_total_accuracy.append(self.check_accuracy(check_batch=self.test_batch))
             self.epoch_cost_function.append(self.cost_function(full_circ_torch, self.opt.param_groups[0]['params'][0], self.batch, self.symmetric, self.design))
             #print(f"epoch {i}/{epochs} accuracy: {self.epoch_accuracy[-1]}")
             print(f"epoch {i}/{epochs} cost function: {self.epoch_cost_function[-1]}")
