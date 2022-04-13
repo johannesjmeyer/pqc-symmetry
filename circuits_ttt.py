@@ -13,6 +13,7 @@ from sklearn.metrics import confusion_matrix
 from torch import multiprocessing as mp
 from torch.multiprocessing import Pool
 import torch
+#from lbfgsnew.lbfgsnew import LBFGSNew
 #import deepdish as dd
 #from jax.config import config
 #config.update("jax_enable_x64", True)
@@ -24,11 +25,8 @@ import torch
 ###################################################
 args_symmetric = {'c': 2, 'e': 2, 'o': 1, 'm': 2, 'i': 1, 'd': 1}
 args_asymmetric = {'c': 8, 'e': 8, 'o': 8, 'm': 2, 'i': 4, 'd': 4}
-
-test_var = 0
-#if __name__ == '__main__':
-#mp.set_start_method("spawn")
-
+if __name__ == "__main__":
+    gate_2q = qml.CRX
 
 def data_encoding(game):
     '''
@@ -102,17 +100,32 @@ def outer_layer(param, symm=True):
     |         |
     6  - 5 -  4
     '''
-    connections = list(range(8)) + [0] 
+    """"""
+    corners = [0, 2, 4, 6]
+    edges = [1, 3, 5, 7]
 
     if symm:
+        for i in range(4):
+            print(gate_2q)
+            gate_2q(param[0], wires=[corners[i], edges[i]])
+            gate_2q(param[0], wires=[corners[i], edges[i-1]])
+    else:
+        for i in range(4):
+            gate_2q(param[2*i], wires=[corners[i], edges[i]])
+            gate_2q(param[2*i+1], wires=[corners[i], edges[i-1]])
+
+    """
+    connections = list(range(8)) + [0] 
+    if symm:
         for i in range(8):
-            qml.CRZ(param[0], wires=[connections[i], connections[i+1]])
-            qml.CRZ(-param[0], wires=[connections[i+1], connections[i]])
+            qml.CRX(param[0], wires=[connections[i], connections[i+1]])
+            qml.CRX(-param[0], wires=[connections[i+1], connections[i]])
 
     else:
         for i in range(8):
-            qml.CRZ(param[i], wires=[connections[i], connections[i+1]])
-            qml.CRZ(-param[i], wires=[connections[i+1], connections[i]])
+            qml.CRX(param[i], wires=[connections[i], connections[i+1]])
+            qml.CRX(-param[i], wires=[connections[i+1], connections[i]])
+    """
 
 def inner_layer(param, symm=True):
     '''
@@ -123,17 +136,24 @@ def inner_layer(param, symm=True):
          |
     6    5    4
     '''
-    connections = [1, 3, 5, 7]
-
+    edges = [1, 3, 5, 7]
+    if symm:
+        for i in edges:
+            gate_2q(param[0], wires=[i, 8])
+    else:
+        for i in edges:
+            gate_2q(param[i], wires=[i, 8])
+    """
     if symm:
         for i in connections:
-            qml.CRZ(param[0], wires=[8, i])
-            qml.CRZ(-param[0], wires=[i, 8])
+            qml.CRX(param[0], wires=[8, i])
+            qml.CRX(-param[0], wires=[i, 8])
 
     else:
         for n, i in enumerate(connections):
-            qml.CRZ(param[n], wires=[8, i])    
-            qml.CRZ(-param[n], wires=[i, 8])    
+            qml.CRX(param[n], wires=[8, i])    
+            qml.CRX(-param[n], wires=[i, 8])    
+    """
   
 def diag_layer(param, symm=True):
     '''
@@ -144,17 +164,24 @@ def diag_layer(param, symm=True):
       /     \ 
     6    5    4
     '''
-    connections = [0, 2, 4, 6]
-
+    corners = [0, 2, 4, 6]
+    if symm:
+        for i in corners:
+            gate_2q(param[0], wires=[i, 8])
+    else:
+        for i in corners:
+            gate_2q(param[i], wires=[i, 8])
+    """
     if symm:
         for i in connections:
-            qml.CRZ(param[0], wires=[8, i])
-            qml.CRZ(-param[0], wires=[i, 8])
+            qml.CRX(param[0], wires=[8, i])
+            qml.CRX(-param[0], wires=[i, 8])
 
     else:
         for n, i in enumerate(connections):
-            qml.CRZ(param[n], wires=[8, i])
-            qml.CRZ(-param[n], wires=[i, 8])
+            qml.CRX(param[n], wires=[8, i])
+            qml.CRX(-param[n], wires=[i, 8])
+    """
 
 ### Non symmetric functions ###
 
@@ -571,19 +598,14 @@ class tictactoe():
 
         self.gd_cost = []
         self.theta = self.init_params_torch
-
-        self.opt = torch.optim.LBFGS([self.theta], lr=stepsize)
+        #self.opt = torch.optim.LBFGS([self.theta], lr=stepsize)
+        #self.opt = LBFGSNew([self.theta], lr=stepsize, line_search_fn=True, batch_mode=True)
+        self.opt = torch.optim.Adam([self.theta], lr=stepsize)
         self.stepsize = stepsize
         self.epoch_total_accuracy = []
         self.epoch_accuracy = []
         self.epoch_cost_function = []
 
-        def closure():
-            self.opt.zero_grad()
-            loss = self.cost_function(full_circ_torch, self.theta, self.games_sample, self.symmetric, self.design)
-            loss.backward()
-            return loss
-        
         step_start = 0
         step_end = 0
         
@@ -594,6 +616,13 @@ class tictactoe():
                 cost_temp = self.cost_function(full_circ_torch, self.opt.param_groups[0]['params'][0], self.games_sample, self.symmetric, self.design)
                 print(f"epoch {i}/{epochs} step {j}/{steps_per_epoch} current cost value: {cost_temp} execution time: {step_end-step_start}s")
                 step_start = timer()
+
+                def closure():
+                    self.opt.zero_grad()
+                    loss = self.cost_function(full_circ_torch, self.theta, self.games_sample, self.symmetric, self.design)
+                    loss.backward()
+                    return loss
+                
                 self.opt.step(closure)
                 step_end = timer()
 

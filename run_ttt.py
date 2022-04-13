@@ -1,6 +1,7 @@
 # %%
 from tictactoe import *
 from circuits_ttt import *
+import circuits_ttt
 
 import argparse # parser for command line options
 import glob
@@ -95,6 +96,9 @@ parser.add_argument('-ce', "--crossentropy", type=str, default = 'false',
 
 parser.add_argument('-epm', "--epochmult", type=float, default = 1.,
                     help='how many times to repeat data inside the epoch batch. Can be float.') 
+        
+parser.add_argument('-cg', "--controlgate", type=str, default = 'x',
+                    help='Use CRX gate to entangle qubits instead of CRZ') 
 
 args = parser.parse_args()
 ###############################################################
@@ -111,6 +115,14 @@ else:
             gen_games_sample(args.points, output = args.data) # create data file with specified name and size (# of points)
     data_name = args.data
 
+if args.controlgate == 'x':
+    circuits_ttt.gate_2q = qml.CRX
+elif args.controlgate == 'z':
+    circuits_ttt.gate_2q = qml.CRZ
+elif args.controlgate == 'y':
+    circuits_ttt.gate_2q = qml.CRY
+else:
+    raise TypeError
 ###############################################################
 ############## run experiment
 ###############################################################
