@@ -166,10 +166,10 @@ def diag_layer(param, symm=True):
     corners = [0, 2, 4, 6]
     if symm:
         for i in corners:
-            gate_2q(param[0], wires=[i, 8])
+            gate_2q(param[0], wires=[8, i])
     else:
         for i in corners:
-            gate_2q(param[i], wires=[i, 8])
+            gate_2q(param[i], wires=[8, i])
     """
     if symm:
         for i in connections:
