@@ -147,8 +147,8 @@ def inner_layer(param, symm=True):
             for i in edges:
                 gate_2q(param[0], wires=[i, 8])
         else:
-            for i in edges:
-                gate_2q(param[i], wires=[i, 8])
+            for n, i in enumerate(edges):
+                gate_2q(param[n], wires=[i, 8])
     else:
         for i in edges:
             gate_2q(wires=[i, 8]) 
@@ -179,8 +179,8 @@ def diag_layer(param, symm=True):
             for i in corners:
                 gate_2q(param[0], wires=[8, i])
         else:
-            for i in corners:
-                gate_2q(param[i], wires=[8, i])
+            for n, i in enumerate(corners):
+                gate_2q(param[n], wires=[8, i])
     else:
         for i in corners:
             gate_2q(wires=[8, i])
@@ -442,6 +442,26 @@ def cross_entropy_cost_batch(circ, params, games, symmetric, design):
     return -torch.mean(cost_vector)
     """
 
+def cost_fn_5q(circ, params, games, symmetric, design):
+
+    loss = 0
+    for i, g in enumerate(games):  # TODO: implement multiprocessing with pool here
+        result = circ(g,params, symmetric, design=design, alt_results=True)
+        label = get_label(g)
+        avg_result = get_results(result)
+
+        if label == 0:
+            loss += (avg_result[1]-1)**2
+        elif label == 1:
+            loss += ((avg_result[1]+1)**2 + (avg_result[0]-1)**2)/2
+        elif label == -1:
+            loss += ((avg_result[1]+1)**2 + (avg_result[0]+1)**2)/2
+        else:
+            raise TypeError('game has no label')      
+
+    return loss/len(games)
+
+
 def get_results_no_normalizing(result):
     '''takes 9 qubits exp values and averages edges (4q)/corners (4q)/center (1q), returns 3d vector'''
     # THIS SHOULD ALREADY BE GOOD FOR TORCH (CE)
@@ -516,7 +536,7 @@ def gen_games_sample(size, wins=[1, 0, -1], output = None, reduced=False, truesi
 
 class tictactoe():
 
-    def __init__(self, symmetric=True, sample_size=5, design="tceocem tceicem tcedcem", data_file=None, alt_results=True, random_sample=False, wins = [-1, 0, 1], reduced = False, cross_entropy = False):
+    def __init__(self, symmetric=True, sample_size=5, design="tceocem tceicem tcedcem", data_file=None, alt_results=True, random_sample=False, wins = [-1, 0, 1], reduced = False, cross_entropy = False, cost_5q=True):
 
         self.sample_size = sample_size
         self.design = design
@@ -525,10 +545,14 @@ class tictactoe():
         self.wins = wins
         self.reduced = reduced
         self.epochs = False
+        self.cost_5q = cost_5q
 
         if cross_entropy:
             print('using cross entropy cost function...')
             self.cost_function = cross_entropy_cost_batch
+        elif cost_5q:
+            print('using 5q cost function...')
+            self.cost_function = cost_fn_5q
         elif alt_results:
             print('using mean squared cost function...')
             self.cost_function = cost_function_alt_batch
@@ -772,8 +796,25 @@ class tictactoe():
         #self.results = results
 
         # check accuracy
+        if self.cost_5q:
+            won = [-1, 0, 1]
+            res_circ2 = []
+            for i in res_circ:
+                if i[1] < 0:
+                    res_circ2.append(0)
+                elif i[0] > 0:
+                    res_circ2.append(1)
+                else: 
+                    res_circ.append(-1)
 
-        if self.alt_results:
+            self.confusion_matrix = confusion_matrix(res_true, res_circ2, normalize='true')
+            self.accuracy = self.confusion_matrix.trace()/3
+            print('Confusion matrix:')
+            print(self.confusion_matrix)
+
+            return self.confusion_matrix
+
+        elif self.alt_results:
             # confusion matrix:
             won = [-1, 0, 1]
             res_circ2 = [won[i.argmax()] for i in res_circ]
