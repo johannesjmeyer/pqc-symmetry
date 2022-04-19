@@ -152,7 +152,8 @@ else:
 ###############################################################
 
 #filename = args.foldername + f'/r-{args.repetitions}_l-{args.layout}_ss-{args.stepsize}_p-{args.points}_n-{args.num_steps}_s-{args.symmetric}_sr-{args.samplerandom}_wr-{args.winsrandom}-TIME{int(time.time())}'
-filename = args.foldername + '/' + '-'.join(f'{k}={v}' for k, v in vars(args).items()) + f'-TIME{int(time.time())}' + '-'+str(round(np.random.uniform(), 3))
+#filename = args.foldername + '/' + '-'.join(f'{k}={v}' for k, v in vars(args).items()) + f'-TIME{int(time.time())}' + '-'+str(round(np.random.uniform(), 3))
+filename = args.foldername + '/' + f'TIME{int(time.time())}' + '-'+str(round(np.random.uniform(), 3))
 
 if 'R' in args.wins:
     wins=[]
