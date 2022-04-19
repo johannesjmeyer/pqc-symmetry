@@ -536,7 +536,7 @@ def gen_games_sample(size, wins=[1, 0, -1], output = None, reduced=False, truesi
 
 class tictactoe():
 
-    def __init__(self, symmetric=True, sample_size=5, design="tceocem tceicem tcedcem", data_file=None, alt_results=True, random_sample=False, wins = [-1, 0, 1], reduced = False, cross_entropy = False, cost_5q=True):
+    def __init__(self, symmetric=True, sample_size=5, design="tceocem tceicem tcedcem", data_file=None, alt_results=True, random_sample=False, wins = [-1, 0, 1], reduced = False, cross_entropy = False, cost_5q=False):
 
         self.sample_size = sample_size
         self.design = design
