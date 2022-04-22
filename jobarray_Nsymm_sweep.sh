@@ -29,7 +29,7 @@ source ./ttt/bin/activate
 #points=30 # number of points to compute gradient
 #statistics=19 # number of runs for each parameter combination -1
 
-readarray -t parameters < ./param_file_eps.txt
+readarray -t parameters < ./param_file_eps_Nsymm.txt
 
 #echo " "
 #echo "##############################################"
