@@ -313,7 +313,7 @@ def circuit(game, params, symmetric, design="tceocem tceicem tcedcem", alt_resul
         # TODO: this should automatically start from the all-zero state in comp basis right?
 
         args = translate_to_parameters(design, symmetric)
-        ngame = np.pi*game  # normalize entries of game so they are between -pi/2, pi/2 # used to be np.pi*0.5*game
+        ngame = .5*np.pi*game  # normalize entries of game so they are between -pi/2, pi/2 # used to be np.pi*0.5*game
 
         for r in range(params.shape[0]): # r repetitions
 
