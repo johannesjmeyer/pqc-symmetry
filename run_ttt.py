@@ -76,8 +76,8 @@ parser.add_argument('-r', "--altresult", type=str, default = 'true',
 parser.add_argument('-sr', "--samplerandom", type=str, default = 'false', # not implemented for epochs
                     help='if true, pick new random games for each step') 
 
-parser.add_argument('-w', "--wins", type=str, default = '-1 0 1',
-                    help='wins to include in dataset. Seperate numbers with a space e.g. only including wins for -1 and 0 would look like "-1 0". For completely random games set to "R"') 
+parser.add_argument('-w', "--wins", default = "0,1,2",
+                    help='wins to include in dataset. Seperate numbers with a comma e.g. only including wins for -1 and 0 would look like -1,0. For completely random games set to "R"') 
 
 parser.add_argument('-es', "--excludesymmetry", type=str, default = 'false',
                     help='if true, uses reduced dataset only keeps one game per symmetry group') 
@@ -101,9 +101,9 @@ parser.add_argument('-cg', "--controlgate", type=str, default = 'x',
                     help='Use different gate: \
                         "x": CNOT \
                         "z": CZ \
-                        "crx": CRX \
-                        "crz": CRZ \
-                        "cry": CRY') 
+                        "rx": CRX \
+                        "rz": CRZ \
+                        "ry": CRY') 
 
 args = parser.parse_args()
 ###############################################################
@@ -158,7 +158,11 @@ filename = args.foldername + '/' + f'TIME{int(time.time())}' + '-'+str(round(np.
 if 'R' in args.wins:
     wins=[]
 else:
-    wins = [int(i) for i in args.wins.split(' ')]
+    #wins = [int(i) for i in args.wins.split(' ')]
+    wins = *map(int, args.wins.split(sep=",")),
+    wins = [w-1 for w in wins]
+
+print(f'wins: {wins}\n')
 
 start = timer()
 exp = tictactoe(symmetric=str2bool(args.symmetric), sample_size=args.points, data_file=data_name, design=args.layout, alt_results=str2bool(args.altresult), \
