@@ -95,7 +95,7 @@ else:
     import os.path
     if not os.path.isfile(args.data): # if the specified data file does not exist
         if str2bool(args.epochs):
-            gen_games_sample(args.points, output = args.data, truesize=True)
+            gen_games_sample(args.points, output = args.data)
         else:
             gen_games_sample(args.points, output = args.data) # create data file with specified name and size (# of points)
     data_name = args.data
@@ -124,14 +124,11 @@ else:
     raise TypeError
 
 if pdg.rotation_2q:
-    pdg.args_symmetric = {'c': 2, 'e': 2, 'o': 1, 'm': 2, 'i': 1, 'd': 1, 'ed': 3, 'sd':2}
-    pdg.args_asymmetric = {'c': 8, 'e': 8, 'o': 8, 'm': 2, 'i': 4, 'd': 4, 'ed': 9, 'sd':2}
+    pdg.args_symmetric = {'c': 2, 'e': 2, 'o': 2, 'm': 2, 'i': 1, 'd': 1, 'z': 3, 'x':2}
+    pdg.args_asymmetric = {'c': 8, 'e': 8, 'o': 8, 'm': 2, 'i': 4, 'd': 4, 'z': 9, 'x':2}
 else:
-    pdg.args_symmetric = {'c': 2, 'e': 2, 'o': 0, 'm': 2, 'i': 0, 'd': 0, 'ed': 0, 'sd':2}
-    pdg.args_asymmetric = {'c': 8, 'e': 8, 'o': 0, 'm': 2, 'i': 0, 'd': 0, 'ed': 0, 'sd':2}
-
-    args_symmetric = {'c': 2, 'e': 2, 'o': 1, 'm': 2, 'i': 1, 'd': 1, 'ed': 3, 'sd':2}
-    args_asymmetric = {'c': 8, 'e': 8, 'o': 8, 'm': 2, 'i': 4, 'd': 4, 'ed': 9, 'sd':2}
+    pdg.args_symmetric = {'c': 2, 'e': 2, 'o': 0, 'm': 2, 'i': 0, 'd': 0, 'z': 0, 'x':2}
+    pdg.args_asymmetric = {'c': 8, 'e': 8, 'o': 0, 'm': 2, 'i': 0, 'd': 0, 'z': 0, 'x':2}
 #######################
 
 filename = args.foldername + '/' + '-'.join(f'{k}={v}' for k, v in vars(args).items()) + f'-TIME{int(time.time())}'
@@ -149,6 +146,3 @@ exp.check_accuracy()
 end = timer()
 exp.save(filename, end - start)
 print('Total execution time: {} s'.format(end - start))
-
-plt.plot(range(10), range(10))
-plt.show()

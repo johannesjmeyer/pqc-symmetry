@@ -33,18 +33,48 @@ def make_data():
 
     return all_situations, all_labels
 """   
+def get_symmetries(game):
+
+    all_symmetries = [game]      
+
+    for i in range(3):
+        all_symmetries.append(np.rot90(all_symmetries[-1]))
+
+    all_symmetries.append(np.flipud(game))
+    all_symmetries.append(np.fliplr(game))
+
+    # add diagnoal symmetry
+    all_symmetries.append(game.T)
+    all_symmetries.append(np.fliplr((np.fliplr(game)).T))
+
+    return all_symmetries
+
+shapes = []
+shapes += [np.array([[1, 1, 1], [-1, -1, -1], [-1, -1, -1]], dtype=float, requires_grad = False)]
+shapes += [np.array([[-1, -1, -1], [1, 1, 1], [-1, -1, -1]], dtype=float, requires_grad = False)]
+shapes += [np.array([[1, 1, 1], [-1, 1, -1], [-1, 1, -1]], dtype=float, requires_grad = False)]
+shapes += [np.array([[1, 1, 1], [1, -1, 1], [1, 1, 1]], dtype=float, requires_grad = False)]
+shapes += [np.array([[-1, -1, -1], [1, 1, 1], [-1, 1, -1]], dtype=float, requires_grad = False)]
+shapes += [np.array([[1, 1, 1], [1, -1, -1], [1, -1, -1]], dtype=float, requires_grad = False)]
+shapes += [np.array([[-1, 1, 1], [-1, 1, -1], [-1, 1, -1]], dtype=float, requires_grad = False)]
+shapes += [np.array([[-1, -1, -1], [-1, 1, 1], [-1, 1, -1]], dtype=float, requires_grad = False)]
+shapes += [np.array([[-1, 1, -1], [1, 1, 1], [-1, 1, -1]], dtype=float, requires_grad = False)]
+shapes += [np.array([[1, -1, 1], [1, 1, 1], [1, -1, 1]], dtype=float, requires_grad = False)]
+shapes += [np.array([[-1, -1, 1], [1, 1, 1], [1, -1, -1]], dtype=float, requires_grad = False)]
+shapes += [np.array([[-1, -1, -1], [1, 1, 1], [1, -1, 1]], dtype=float, requires_grad = False)]
+shapes += [np.array([[1, -1, -1], [1, 1, 1], [1, -1, 1]], dtype=float, requires_grad = False)]
+shapes += [np.array([[1, 1, 1], [1, -1, 1], [1, -1, 1]], dtype=float, requires_grad = False)]
+shapes += [np.array([[-1, 1, -1], [1, 1, -1], [1, -1, -1]], dtype=float, requires_grad = False)]
+shapes += [np.array([[-1, 1, -1], [1, 1, 1], [1, -1, -1]], dtype=float, requires_grad = False)]
+
 def make_data():
     all_roads = []
     all_labels = []
 
-    all_roads += tic.get_symmetries(np.array([[-1, -1, -1], [1, 1, 1], [-1, -1, -1]], dtype=float, requires_grad = False))
-    all_roads += tic.get_symmetries(np.array([[1, 1, 1], [-1, 1, -1], [-1, 1, -1]], dtype=float, requires_grad = False))
-    all_roads += [np.array([[1, 1, 1], [1, -1, 1], [1, 1, 1]], dtype=float, requires_grad = False)]
-    all_roads += tic.get_symmetries(np.array([[-1, -1, -1], [1, 1, 1], [-1, 1, -1]], dtype=float, requires_grad = False))
-    all_roads += tic.get_symmetries(np.array([[1, 1, 1], [1, -1, -1], [1, -1, -1]], dtype=float, requires_grad = False))
-    all_roads += tic.get_symmetries(np.array([[-1, 1, 1], [-1, 1, -1], [-1, 1, -1]], dtype=float, requires_grad = False))
-    all_roads += tic.get_symmetries(np.array([[-1, -1, -1], [-1, 1, 1], [-1, 1, -1]], dtype=float, requires_grad = False))
-    all_roads += tic.get_symmetries(np.array([[-1, 1, -1], [1, 1, 1], [-1, 1, -1]], dtype=float, requires_grad = False))
+    for shape in shapes:
+        all_roads += tic.get_symmetries(shape)
+
+    all_roads = list(np.unique(np.array(all_roads), axis=0))
 
     all_situations = []
     for road in all_roads:
@@ -85,7 +115,7 @@ def get_label(road):
     
     return label
 """   
-# %%
+
 def get_label(situation):
     road = situation[0]
     direction = situation[1]
@@ -126,7 +156,7 @@ def get_label(situation):
         label.append('s')
     
     return label
-# %%
+
 def get_directions(road):
     n = road.shape[0]
     pos = (np.argwhere(road == 0))[0]
@@ -156,7 +186,7 @@ def get_directions(road):
         label.append('x')
 
     return label
-# %%
+
 def get_diff(situation):
     label = get_label(situation)
     if label == ['f'] or label == ['s']:
@@ -173,7 +203,7 @@ def get_diff(situation):
         return 1
     else:
         raise AttributeError()
-# %%
+
 def gen_road(n, l):
     road = np.ones((n, n))*-1
     prev_step = random.choice(get_border(n))
@@ -189,5 +219,7 @@ def gen_road(n, l):
 
 def get_border(n):
     return [[0, i] for i in range(n)] + [[n-1, i] for i in range(n)] + [[i, 0] for i in range(1, n-1)] + [[i, n-1] for i in range(1, n-1)]
+
+
 
 # %%
