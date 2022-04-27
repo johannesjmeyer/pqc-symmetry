@@ -62,7 +62,7 @@ parser.add_argument('-l', "--layout", type=str, default = 'tcemoid',
 parser.add_argument('-f', "--foldername", type=str, default = 'output',
                     help='filename to save') 
 
-parser.add_argument('-ss', "--stepsize", type=float, default = 0.008,
+parser.add_argument('-ss', "--stepsize", type=float, default = 0.1,
                     help='specifies step size of gradient descent optimizer') 
 
 parser.add_argument('-sr', "--samplerandom", type=str, default = 'false', # not implemented for epochs
@@ -71,7 +71,7 @@ parser.add_argument('-sr', "--samplerandom", type=str, default = 'false', # not 
 parser.add_argument('-re', "--repetitions", type=int, default = 7,
                     help='how many times to repeat layout') 
 
-parser.add_argument('-ep', "--epochs", type=str, default = 'true',
+parser.add_argument('-ep', "--epochs", type=str, default = 'false',
                     help='uses epochs') 
 
 parser.add_argument('-epn', "--epochssize", type=int, default = 10, # actually specifies how many epochs there will be

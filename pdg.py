@@ -1,10 +1,9 @@
 # %%
 from cmath import pi
-from distutils.command import check
 from http.client import responses
-from uuid import RESERVED_FUTURE
 import pennylane as qml
 from pennylane import numpy as np
+from tictactoe import *
 import random
 from copy import copy, deepcopy
 from tabulate import tabulate
