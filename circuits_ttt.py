@@ -649,7 +649,14 @@ class tictactoe():
         step_start = 0
         step_end = 0
         
-        for i in range(epochs):
+        print(f'epoch 0/{epochs} accuracy:')
+        self.epoch_accuracy.append(self.check_accuracy(check_batch=self.batch))
+        print(f'epoch 0/{epochs} total accuracy:')
+        self.epoch_total_accuracy.append(self.check_accuracy(check_batch=self.test_batch))
+        self.epoch_cost_function.append(self.cost_function(full_circ_torch, self.theta, self.batch, self.symmetric, self.design))
+          
+
+        for i in range(1,epochs+1):
 
             for j, sample in enumerate([self.batch[k:k+samplesize_per_step] for k in range(0, len(self.batch), samplesize_per_step)]):
                 self.games_sample = sample
