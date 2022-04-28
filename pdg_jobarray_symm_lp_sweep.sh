@@ -23,7 +23,7 @@ export MPLCONFIGDIR=../mpl
 source ./ttt/bin/activate
 
 
-readarray -t parameters < ./param_file_pdg_lp_Nsymm.txt
+readarray -t parameters < ./param_file_pdg_lp_symm.txt
 
 
 /usr/bin/time -f "\t%E real,\t%M kb MaxMem" /home/frarzani/pqc-symmetry/ttt/bin/python3 -u run_pdg.py ${parameters[$SLURM_ARRAY_TASK_ID]}
