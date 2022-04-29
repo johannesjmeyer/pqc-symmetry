@@ -674,7 +674,7 @@ class road_detection():
         #dd.io.save(name + '.h5', to_save)
         print('Saving results as {}.npy'.format(name))
         try:
-            np.save('output/'+name, to_save)
+            np.save(name, to_save)
         except FileNotFoundError:
             os.makedirs(os.getcwd()+'/output/'+name[::-1].split('/', 1)[1][::-1])
             np.save('output/'+name, to_save)
