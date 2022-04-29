@@ -131,7 +131,8 @@ else:
     pdg.args_asymmetric = {'c': 8, 'e': 8, 'o': 0, 'm': 2, 'i': 0, 'd': 0, 'z': 0, 'x':2}
 #######################
 
-filename = args.foldername + '/' + '-'.join(f'{k}={v}' for k, v in vars(args).items()) + f'-TIME{int(time.time())}'
+#filename = args.foldername + '/' + '-'.join(f'{k}={v}' for k, v in vars(args).items()) + f'-TIME{int(time.time())}'
+filename = args.foldername + '/' + f'TIME{int(time.time())}' + '-'+str(round(np.random.uniform(), 3))
 
 start = timer()
 exp = road_detection(symmetric=str2bool(args.symmetric), sample_size=args.points, data_file=data_name, design=args.layout)
