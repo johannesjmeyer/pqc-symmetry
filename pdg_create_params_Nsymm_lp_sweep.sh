@@ -34,7 +34,7 @@ ss=0.1
         for p in "cemoid" "cemoidcemoid" "cemoidcemoidcemoid" ; do # sweeping repetitions of cmoid layout after each data encoding
 	    #mkdir ./output/jobarray/epochs/${marker} # this is for laptop
             mkdir /scratch/frarzani/pqc_out/pdg/${marker} # this is for cluster
-	        paramstr="-s false -n ${steps} -p ${points} -l t${p} -f /scratch/frarzani/pqc_out/epochs/${marker} -ss ${ss} -re ${reps} -cg rz"
+	        paramstr="-s false -n ${steps} -p ${points} -l t${p} -f /scratch/frarzani/pqc_out/pdg/${marker} -ss ${ss} -re ${reps} -cg rz"
             #printf "%s" "${paramstr}" > ./output/jobarray/no_epochs/${marker}/params.txt # laptop
             printf "%s" "${paramstr}" > /scratch/frarzani/pqc_out/pdg/${marker}/params.txt # cluster
             marker=$((marker+1))
