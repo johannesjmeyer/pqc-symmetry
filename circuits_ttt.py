@@ -29,6 +29,9 @@ if __name__ == "__main__":
     args_asymmetric = {'c': 8, 'e': 8, 'o': 8, 'm': 2, 'i': 4, 'd': 4}
     gate_2q = qml.CRX
     rotation_2q = True
+    corner_qubits = [0, 2, 4, 6]
+    edge_qubits = [1, 3, 5, 7]
+    middle_qubit = [8]
 
 def data_encoding(game):
     '''
@@ -52,16 +55,14 @@ def corners(param, symm=True):
     '''
     applies RX an RZ gates on corners
     '''
-    qubits = [0, 2, 4, 6]
-
     if symm:
-        for i in qubits:
+        for i in corner_qubits:
 
             qml.RX(param[0], wires=i)
             qml.RY(param[1], wires=i)
 
     else:
-        for n, i in enumerate(qubits):
+        for n, i in enumerate(corner_qubits):
             qml.RX(param[i], wires=i)
             qml.RY(param[i+1], wires=i)
 
@@ -71,16 +72,14 @@ def edges(param, symm=True):
     '''
     applies RX an RZ gates on edges
     '''
-    qubits = [1, 3, 5, 7]
-
     if symm:
-        for i in qubits:
+        for i in edge_qubits:
 
             qml.RX(param[0], wires=i)
             qml.RY(param[1], wires=i)
 
     else:
-        for n, i in enumerate(qubits):
+        for n, i in enumerate(edge_qubits):
             qml.RX(param[i-1], wires=i)
             qml.RY(param[i], wires=i)
     
@@ -89,8 +88,8 @@ def center(param):
     '''
     applies RX an RZ gate on the middle qubit
     '''
-    qml.RX(param[0], wires=8)
-    qml.RY(param[1], wires=8)
+    qml.RX(param[0], wires=middle_qubit[0])
+    qml.RY(param[1], wires=middle_qubit[0])
 
 
 def outer_layer(param, symm=True):
@@ -103,21 +102,19 @@ def outer_layer(param, symm=True):
     6  - 5 -  4
     '''
     """"""
-    corners = [0, 2, 4, 6]
-    edges = [1, 3, 5, 7]
     if rotation_2q:
         if symm:
             for i in range(4):
-                    gate_2q(param[0], wires=[corners[i], edges[i]])
-                    gate_2q(param[0], wires=[corners[i], edges[i-1]])
+                    gate_2q(param[0], wires=[corner_qubits[i], edge_qubits[i]])
+                    gate_2q(param[0], wires=[corner_qubits[i], edge_qubits[i-1]])
         else:
             for i in range(4):
-                    gate_2q(param[2*i], wires=[corners[i], edges[i]])
-                    gate_2q(param[2*i+1], wires=[corners[i], edges[i-1]])
+                    gate_2q(param[2*i], wires=[corner_qubits[i], edge_qubits[i]])
+                    gate_2q(param[2*i+1], wires=[corner_qubits[i], edge_qubits[i-1]])
     else:
         for i in range(4):
-            gate_2q(wires=[corners[i], edges[i]])
-            gate_2q(wires=[corners[i], edges[i-1]])      
+            gate_2q(wires=[corner_qubits[i], edge_qubits[i]])
+            gate_2q(wires=[corner_qubits[i], edge_qubits[i-1]])      
 
     """
     connections = list(range(8)) + [0] 
@@ -141,17 +138,16 @@ def inner_layer(param, symm=True):
          |
     6    5    4
     '''
-    edges = [1, 3, 5, 7]
     if rotation_2q:
         if symm:
-            for i in edges:
-                gate_2q(param[0], wires=[i, 8])
+            for i in edge_qubits:
+                gate_2q(param[0], wires=[i, middle_qubit[0]])
         else:
-            for n, i in enumerate(edges):
-                gate_2q(param[n], wires=[i, 8])
+            for n, i in enumerate(edge_qubits):
+                gate_2q(param[n], wires=[i, middle_qubit[0]])
     else:
-        for i in edges:
-            gate_2q(wires=[i, 8]) 
+        for i in edge_qubits:
+            gate_2q(wires=[i, middle_qubit[0]]) 
     """
     if symm:
         for i in connections:
@@ -173,17 +169,16 @@ def diag_layer(param, symm=True):
       /     \ 
     6    5    4
     '''
-    corners = [0, 2, 4, 6]
     if rotation_2q:
         if symm:
-            for i in corners:
-                gate_2q(param[0], wires=[8, i])
+            for i in corner_qubits:
+                gate_2q(param[0], wires=[middle_qubit[0], i])
         else:
-            for n, i in enumerate(corners):
-                gate_2q(param[n], wires=[8, i])
+            for n, i in enumerate(corner_qubits):
+                gate_2q(param[n], wires=[middle_qubit[0], i])
     else:
-        for i in corners:
-            gate_2q(wires=[8, i])
+        for i in corner_qubits:
+            gate_2q(wires=[middle_qubit[0], i])
 
     """
     if symm:
@@ -466,7 +461,8 @@ def get_results_no_normalizing(result):
     '''takes 9 qubits exp values and averages edges (4q)/corners (4q)/center (1q), returns 3d vector'''
     # THIS SHOULD ALREADY BE GOOD FOR TORCH (CE)
     avg_result = []
-    slicer = [[0, 2, 4, 6], [8], [1, 3, 5, 7]]
+    #slicer = [[0, 2, 4, 6], [8], [1, 3, 5, 7]]
+    slicer = [corner_qubits, middle_qubit, edge_qubits]
     for i in np.array([-1, 0, 1])+1:
         avg_result.append(torch.mean(result[slicer[i]]).reshape(1))
 
@@ -480,7 +476,8 @@ def get_results_no_normalizing(result):
 def get_results(result):
     '''same as above but normalized to [0,1]'''
     avg_result = []
-    slicer = [[0, 2, 4, 6], [8], [1, 3, 5, 7]]
+    #slicer = [[0, 2, 4, 6], [8], [1, 3, 5, 7]]
+    slicer = [corner_qubits, middle_qubit, edge_qubits]
     for i in np.array([-1, 0, 1])+1:
         avg_result.append(torch.mean(result[slicer[i]]).reshape(1))
 
@@ -611,7 +608,7 @@ class tictactoe():
         """
         print('running epochs...')
         print(tabulate([['epochs', epochs], ['stepsize', stepsize], ['symmetric', self.symmetric], ['design', self.design], ['sample size per step', samplesize_per_step], ['steps per epoch', steps_per_epoch], \
-            ['wins', self.wins], ['repetitions', self.repetitions]]))
+            ['wins', self.wins], ['repetitions', self.repetitions], ['corners', corner_qubits], ['edges', edge_qubits], ['center', middle_qubit]]))
 
         self.epochs = True
         if data_file is None:

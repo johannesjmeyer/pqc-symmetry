@@ -105,6 +105,10 @@ parser.add_argument('-cg', "--controlgate", type=str, default = 'x',
                         "rz": CRZ \
                         "ry": CRY') 
 
+parser.add_argument('-sq', "--symmetryqubits", type=str, default = '0,2,4,6,1,3,5,7,8',
+                    help='which qubits should be treated symmetrically when symmetric=True\
+                        First 4, Second 4 qubits and last qubit are treated symetrically') 
+
 args = parser.parse_args()
 ###############################################################
 ############## produce data (mostly useful for debugging)
@@ -163,6 +167,11 @@ else:
     wins = [w-1 for w in wins]
 
 print(f'wins: {wins}\n')
+
+symm_order = [int(i) for i in args.symmetryqubits.split(',')]
+circuits_ttt.corner_qubits = symm_order[:4]
+circuits_ttt.edge_qubits = symm_order[4:8]
+circuits_ttt.middle_qubit = [symm_order[8]]
 
 start = timer()
 exp = tictactoe(symmetric=str2bool(args.symmetric), sample_size=args.points, data_file=data_name, design=args.layout, alt_results=str2bool(args.altresult), \
