@@ -105,7 +105,7 @@ parser.add_argument('-cg', "--controlgate", type=str, default = 'x',
                         "rz": CRZ \
                         "ry": CRY') 
 
-parser.add_argument('-sq', "--symmetryqubits", type=str, default = '0,2,4,6,1,3,5,7,8',
+parser.add_argument('-sq', "--symmetryqubits", type=str, default = '024613578',
                     help='which qubits should be treated symmetrically when symmetric=True\
                         First 4, Second 4 qubits and last qubit are treated symetrically') 
 
@@ -168,7 +168,7 @@ else:
 
 print(f'wins: {wins}\n')
 
-symm_order = [int(i) for i in args.symmetryqubits.split(',')]
+symm_order = [int(i) for i in args.symmetryqubits]
 circuits_ttt.corner_qubits = symm_order[:4]
 circuits_ttt.edge_qubits = symm_order[4:8]
 circuits_ttt.middle_qubit = [symm_order[8]]
