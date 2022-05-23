@@ -389,7 +389,7 @@ def random_params(repetitions, symmetric, design):
 
 pdg_dev = qml.device("lightning.qubit", wires=10)
 full_circ_torch = qml.QNode(circuit, pdg_dev, interface='torch', diff_method='adjoint')
-rng = np.random.default_rng(2021)
+rng = np.random.default_rng()
 
 class road_detection():
 
