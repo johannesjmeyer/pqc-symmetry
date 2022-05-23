@@ -4,21 +4,12 @@ from http.client import responses
 import pennylane as qml
 from pennylane import numpy as np
 from tictactoe import *
-import random
-from copy import copy, deepcopy
 from tabulate import tabulate
 from timeit import default_timer as timer 
 import os
 from sklearn.metrics import confusion_matrix
-from torch import multiprocessing as mp
-from torch.multiprocessing import Pool
 import torch
-#from lbfgsnew.lbfgsnew import LBFGSNew
 #import deepdish as dd
-#from jax.config import config
-#config.update("jax_enable_x64", True)
-#import jax
-#import jax.numpy as jnp
 
 ###################################################
 ###################################################
@@ -116,18 +107,6 @@ def outer_layer(param, symm=True):
             gate_2q(wires=[corner_qubits[i], edge_qubits[i]])
             gate_2q(wires=[corner_qubits[i], edge_qubits[i-1]])      
 
-    """
-    connections = list(range(8)) + [0] 
-    if symm:
-        for i in range(8):
-            qml.CRX(param[0], wires=[connections[i], connections[i+1]])
-            qml.CRX(-param[0], wires=[connections[i+1], connections[i]])
-
-    else:
-        for i in range(8):
-            qml.CRX(param[i], wires=[connections[i], connections[i+1]])
-            qml.CRX(-param[i], wires=[connections[i+1], connections[i]])
-    """
 
 def inner_layer(param, symm=True):
     '''
@@ -148,17 +127,7 @@ def inner_layer(param, symm=True):
     else:
         for i in edge_qubits:
             gate_2q(wires=[i, middle_qubit[0]]) 
-    """
-    if symm:
-        for i in connections:
-            qml.CRX(param[0], wires=[8, i])
-            qml.CRX(-param[0], wires=[i, 8])
 
-    else:
-        for n, i in enumerate(connections):
-            qml.CRX(param[n], wires=[8, i])    
-            qml.CRX(-param[n], wires=[i, 8])    
-    """
   
 def diag_layer(param, symm=True):
     '''
@@ -180,56 +149,46 @@ def diag_layer(param, symm=True):
         for i in corner_qubits:
             gate_2q(wires=[middle_qubit[0], i])
 
-    """
-    if symm:
-        for i in connections:
-            qml.CRX(param[0], wires=[8, i])
-            qml.CRX(-param[0], wires=[i, 8])
+def specify_gates(controlstring):
+    '''
+    replaces the control string fed in input with the appropriate pennylane gates used to build the circuit
+    '''
+    global rotation_2q
+    global gate_2q
+    global args_symmetric
+    global args_asymmetric
+
+    if controlstring == 'rx':
+        rotation_2q = True
+        gate_2q = qml.CRX
+
+    elif controlstring == 'rz':
+        rotation_2q = True
+        gate_2q = qml.CRZ
+
+    elif controlstring == 'ry':
+        rotation_2q = True
+        gate_2q = qml.CRY
+
+    elif controlstring == 'x':
+        rotation_2q = False
+        gate_2q = qml.CNOT
+
+    elif controlstring == 'z':
+        rotation_2q = False
+        gate_2q = qml.CZ
 
     else:
-        for n, i in enumerate(connections):
-            qml.CRX(param[n], wires=[8, i])
-            qml.CRX(-param[n], wires=[i, 8])
-    """
+        raise TypeError
 
-### Non symmetric functions ###
-
-
-#############################################
-# following is obsolete #####################
-
-def data_encoding_old(game):
-    '''
-    loops through game array, applies RX(game[i]) on wire i
-    input: 9x9 np array representation of ttt game
-    output: None?
-    '''
-    fgame = game.flatten()
-    for j in range(len(fgame)):
-        qml.RX(fgame[j], wires=j)
-
-
-def row_layer(params):
-    '''
-    entangles nearest neighbours qubits on each ROW of the game through CZs depending on params
-    input: 6-elements parameters vector
-    '''
-    for row in range(3):
-        for col in range(2):
-            qml.CRZ(params[2*row+col],wires=[3*row+col,3*row+col+1])
+    if rotation_2q:
+        args_symmetric = {'c': 2, 'e': 2, 'o': 1, 'm': 2, 'i': 1, 'd': 1}
+        args_asymmetric = {'c': 8, 'e': 8, 'o': 8, 'm': 2, 'i': 4, 'd': 4}
+    else:
+        args_symmetric = {'c': 2, 'e': 2, 'o': 0, 'm': 2, 'i': 0, 'd': 0}
+        args_asymmetric = {'c': 8, 'e': 8, 'o': 0, 'm': 2, 'i': 0, 'd': 0}
         
 
-def column_layer(params):
-    '''
-    entangles nearest neighbours qubits on each COLUMN of the game through CZs depending on params
-    input: 6-elements parameters vector
-    '''
-    for col in range(3):
-        for row in range(2):
-            qml.CRZ(params[2*row+col],wires=[3*col+row,3*col+row+1])
-
-##### until here ##################################
-###################################################
 
 
 def translate_to_parameters(design, symmetric=True):
@@ -288,8 +247,7 @@ def translate_to_parameters(design, symmetric=True):
         
     return param_args
 
-#@qml.qnode(ttt_dev, interface='torch')
-def circuit(game, params, symmetric, design="tceocem tceicem tcedcem", alt_results=True):
+def circuit(game, params, symmetric, design="tceocem tceicem tcedcem"):
         '''
         prepares the all zero comp basis state then iterates through encoding and layers
         encoding and layers are defined by design argument
@@ -305,10 +263,9 @@ def circuit(game, params, symmetric, design="tceocem tceicem tcedcem", alt_resul
                     i: inner layer
                     d: diagonal layer
         '''
-        # TODO: this should automatically start from the all-zero state in comp basis right?
 
         args = translate_to_parameters(design, symmetric)
-        ngame = np.pi*game*2/3  # normalize entries of game so they are between -pi/2, pi/2 # used to be np.pi*0.5*game
+        ngame = np.pi*game*2/3  # normalize entries of game so they are between -2pi/3, 2pi/3
 
         for r in range(params.shape[0]): # r repetitions
 
@@ -328,14 +285,13 @@ def circuit(game, params, symmetric, design="tceocem tceicem tcedcem", alt_resul
                 elif i == 'd':
                     diag_layer(params[r, args[n]:args[n+1]], symmetric)
 
-        if alt_results:
-            return [qml.expval(qml.PauliZ(i)) for i in range(9)]
-        else:
-            return qml.expval(qml.PauliZ(8)) # measure one qubit in comp basis
+
+        return [qml.expval(qml.PauliZ(i)) for i in range(9)]
+
 
 #ttt_dev = qml.device("default.qubit", wires=9) # the device used to label ttt instances 
 ttt_dev = qml.device("lightning.qubit", wires=9) # ligthing.qubit is an optimized version of default.qubit
-# TODO: use other device https://pennylane.ai/plugins.html
+
 
 full_circ = qml.QNode(circuit, ttt_dev)
 full_circ_torch = qml.QNode(circuit, ttt_dev, interface='torch', diff_method="adjoint")# is supoosed to limit RAM usage
@@ -346,7 +302,8 @@ full_circ_torch = qml.QNode(circuit, ttt_dev, interface='torch', diff_method="ad
 ###################################################
 
 
-rng = np.random.default_rng(2021)
+rng = np.random.default_rng()
+# rng = np.random.default_rng(2021) # for reproducible results
 
 ############################
 
@@ -360,39 +317,13 @@ def random_params(repetitions, symmetric, design, enable_torch=False):
     else: 
         return np.array(params, requires_grad = True)
 
-def cost_function(circ, params,game, symmetric, design):
-    return (circ(game,params, symmetric, design=design)-get_label(game))**2
-
-def cost_function_batch(circ, params,games_batch, symmetric, design):
-    '''
-    normalized least squares cost function over batch of data points (games)
-    '''
-    return sum([(circ(g,params, symmetric, design=design)-get_label(g))**2 for g in games_batch])/np.shape(games_batch)[0]
-
-def cost_function_alt(circ, params, game, symmetric, design="tceocem tceicem tcedcem"):
-
-    result = circ(game,params, symmetric, design=design, alt_results=True)
-    print(result)
-    label = get_label(game)
-    slicer = [[0, 2, 4, 6], [8], [1, 3, 5, 7]]
-    
-    won = np.zeros(3)
-    won[label+1] = 1
-    print(won)
-
-    avg_result = []
-    for i in np.array([-1, 0, 1])+1:
-        print((np.average(result[slicer[i]]) - won[i])**2)
-        avg_result.append((np.average(result[slicer[i]]) - won[i])**2)
-    
-    return np.sum(avg_result)
 
 def cost_function_alt_batch(circ, params, games, symmetric, design="tceocem tceicem tcedcem"):
     
     final_results = torch.zeros(len(games))
     for i, g in enumerate(games):  # TODO: implement multiprocessing with pool here
 
-        result = circ(g,params, symmetric, design=design, alt_results=True)
+        result = circ(g,params, symmetric, design=design)
         label = get_label(g)
         
         won = torch.zeros(3)
@@ -410,38 +341,18 @@ def cross_entropy_cost_batch(circ, params, games, symmetric, design):
     input = torch.zeros((len(games), 3))
     target = torch.zeros(len(games), dtype=torch.long)
     for i, g in enumerate(games):
-        result = circ(g,params, symmetric, design=design, alt_results=True)
+        result = circ(g,params, symmetric, design=design)
         input[i] = get_results_no_normalizing(result)
         target[i] = int(get_label(g) + 1)
 
     return loss(input, target)
 
-    """"
-    cost_vector = torch.zeros(len(games))
-    for i, g in enumerate(games):
-
-        result = circ(g,params, symmetric, design=design, alt_results=True)
-        label = get_label(g)
-        
-        y = torch.zeros(3)
-        y[label+1] = 1
-        a = get_results(result)
-
-        #a = result
-        #slicer = [[0, 2, 4, 6], [8], [1, 3, 5, 7]]
-        #y = torch.zeros(9)
-        #y[slicer[label+1]] = 1
-
-        cost_vector[i] = torch.sum(y*torch.log(a)+(1-y)*torch.log(1-a))
-
-    return -torch.mean(cost_vector)
-    """
 
 def cost_fn_5q(circ, params, games, symmetric, design):
 
     loss = 0
     for i, g in enumerate(games):  # TODO: implement multiprocessing with pool here
-        result = circ(g,params, symmetric, design=design, alt_results=True)
+        result = circ(g,params, symmetric, design=design)
         label = get_label(g)
         avg_result = get_results(result)
 
@@ -458,33 +369,28 @@ def cost_fn_5q(circ, params, games, symmetric, design):
 
 
 def get_results_no_normalizing(result):
-    '''takes 9 qubits exp values and averages edges (4q)/corners (4q)/center (1q), returns 3d vector'''
+    '''
+    takes 9 qubits exp values and averages edges (4q)/corners (4q)/center (1q), returns 3d vector
+    only used for cross-entropy loss function
+    '''
     # THIS SHOULD ALREADY BE GOOD FOR TORCH (CE)
     avg_result = []
-    #slicer = [[0, 2, 4, 6], [8], [1, 3, 5, 7]]
     slicer = [corner_qubits, middle_qubit, edge_qubits]
     for i in np.array([-1, 0, 1])+1:
         avg_result.append(torch.mean(result[slicer[i]]).reshape(1))
 
     result = torch.cat(avg_result)
-    #logistic layer
-    #result = torch.exp(a) 
-    #result = result/torch.linalg.norm(result)
 
     return result
 
 def get_results(result):
     '''same as above but normalized to [0,1]'''
     avg_result = []
-    #slicer = [[0, 2, 4, 6], [8], [1, 3, 5, 7]]
     slicer = [corner_qubits, middle_qubit, edge_qubits]
     for i in np.array([-1, 0, 1])+1:
         avg_result.append(torch.mean(result[slicer[i]]).reshape(1))
 
     result = (torch.cat(avg_result) + 1)/2
-    #logistic layer
-    #result = torch.exp(a) 
-    #result = result/torch.linalg.norm(result)
 
     return result
 
@@ -497,6 +403,8 @@ def gen_games_sample(size, wins=[1, 0, -1], output = None, reduced=False, truesi
     If the parameter output is a string instead of "None", the sample is stored in a npz file named after the string
 
     param wins: list of wins to be included in sample. If empty, returns completely random sample.
+
+    NOTE: truesize is only used for lbfgs, otherwise the number of games in the set is fixed in the case of epochs
     '''
     sample = []
     sample_label = []
@@ -533,15 +441,14 @@ def gen_games_sample(size, wins=[1, 0, -1], output = None, reduced=False, truesi
 
 class tictactoe():
 
-    def __init__(self, symmetric=True, sample_size=5, design="tceocem tceicem tcedcem", data_file=None, alt_results=True, random_sample=False, wins = [-1, 0, 1], reduced = False, cross_entropy = False, cost_5q=False):
+    def __init__(self, symmetric=True, sample_size=5, design="tceocem tceicem tcedcem", data_file=None, random_sample=False, wins = [-1, 0, 1], reduced = False, cross_entropy = False, cost_5q=False):
 
         self.sample_size = sample_size
         self.design = design
-        self.alt_results = alt_results
         self.random = random_sample
         self.wins = wins
         self.reduced = reduced
-        self.epochs = False
+        self.epochs = False # used for saving results, turns to True if run_epochs happens
         self.cost_5q = cost_5q
 
         if cross_entropy:
@@ -550,11 +457,9 @@ class tictactoe():
         elif cost_5q:
             print('using 5q cost function...')
             self.cost_function = cost_fn_5q
-        elif alt_results:
+        else:
             print('using mean squared cost function...')
             self.cost_function = cost_function_alt_batch
-        else:
-            self.cost_function = cost_function_batch
 
         if data_file is None:
             self.sample_games(sample_size)
@@ -563,22 +468,13 @@ class tictactoe():
 
         self.symmetric = symmetric
 
-    def random_parameters(self, size=1, repetitions=2):
+    def random_parameters(self, repetitions=2):
         '''
         sets random parameters for circuit design and amount of repetitions
         '''
         self.repetitions = repetitions
-        if size==1:
-            self.init_params_torch = random_params(repetitions, self.symmetric, self.design, True)
-            self.init_params = random_params(repetitions, self.symmetric, self.design)
-        else:
-            # Find best starting paramters
-            params_list = [random_params(repetitions, self.symmetric, self.design, True) for i in range(size)]
-            params_list_torch = [random_params(repetitions, self.symmetric, self.design) for i in range(size)]
-
-            cost_list = [cost_function_batch(k,self.games_sample, self.symmetric) for k in params_list]
-            self.init_params = params_list[np.argmin(cost_list)]
-            self.init_params_torch = params_list_torch[np.argmin(cost_list)]
+        self.init_params_torch = random_params(repetitions, self.symmetric, self.design, True)
+        self.init_params = random_params(repetitions, self.symmetric, self.design)
 
     def sample_games(self, size):
         '''
@@ -602,9 +498,9 @@ class tictactoe():
             self.sample_games(size)
 
 
-    def run_epochs(self, epochs, samplesize_per_step, steps_per_epoch, stepsize, multiplicator=1, data_file = None):
+    def run_epochs(self, epochs, samplesize_per_step, steps_per_epoch, stepsize, data_file = None):
         """
-        Runs lbfgs training with different epochs
+        Runs Adam training with different epochs
         """
         print('running epochs...')
         print(tabulate([['epochs', epochs], ['stepsize', stepsize], ['symmetric', self.symmetric], ['design', self.design], ['sample size per step', samplesize_per_step], ['steps per epoch', steps_per_epoch], \
@@ -612,22 +508,14 @@ class tictactoe():
 
         self.epochs = True
         if data_file is None:
-            if multiplicator == 1:
-                self.batch = gen_games_sample(steps_per_epoch*samplesize_per_step, truesize=True, reduced = self.reduced, wins=self.wins)[0]
-            else:
-                games_per_batch = int(np.ceil(steps_per_epoch*samplesize_per_step / multiplicator))
-                batch = gen_games_sample(games_per_batch, truesize=True, reduced = self.reduced, wins=self.wins)[0]
-                self.batch = batch
-                for i in range(int(np.ceil(multiplicator))):
-                    self.batch = np.append(self.batch, batch, axis=0)
-                np.random.shuffle(self.batch)
-                self.batch = self.batch[:steps_per_epoch*samplesize_per_step]
+            self.batch = gen_games_sample(size = steps_per_epoch*samplesize_per_step, truesize = True, reduced = self.reduced, wins=self.wins)[0]
+            
         else:
             with open('samples/'+data_file+'.npz', 'rb') as f:
                             print('Loading data file \n')
                             self.batch = np.tensor(np.load(f, allow_pickle = True)['sample'], requires_grad=False)
 
-        self.test_batch = gen_games_sample(600, truesize=True, reduced = self.reduced, wins=self.wins)[0]
+        self.test_batch = gen_games_sample(size = 600, truesize = True, reduced = self.reduced, wins = self.wins)[0]
 
         np.random.shuffle(self.batch)
 
@@ -635,8 +523,6 @@ class tictactoe():
 
         self.gd_cost = []
         self.theta = self.init_params_torch
-        #self.opt = torch.optim.LBFGS([self.theta], lr=stepsize)
-        #self.opt = LBFGSNew([self.theta], lr=stepsize, line_search_fn=True, batch_mode=True)
         self.opt = torch.optim.Adam([self.theta], lr=stepsize)
         self.stepsize = stepsize
         self.epoch_total_accuracy = []
@@ -687,33 +573,6 @@ class tictactoe():
         print('Done')
         self.theta = self.opt.param_groups[0]['params'][0]  
 
-
-    def run(self, steps, stepsize=0.01, resume = False):
-        '''
-        runs qml with standard pennylane gradient descent optimizer
-        '''
-        if self.alt_results:
-            raise NotImplementedError('Alt Results only available for torch lbfgs as of now')
-
-        self.interface = 'pennylane'
-        self.opt = qml.GradientDescentOptimizer(stepsize)
-        self.stepsize = stepsize
-
-        if not resume:
-            self.gd_cost = []
-            self.theta = self.init_params
-        for j in range(steps):
-            self.theta = self.opt.step(lambda x: self.cost_function(full_circ, x, self.games_sample, self.symmetric, design=self.design),self.theta)
-            cost_temp = self.cost_function(full_circ, self.theta,self.games_sample, self.symmetric, design=self.design)
-
-            if self.random:
-                self.sample_games(self.sample_size)
-            print(f"step {j} current cost value: {cost_temp}")
-            self.gd_cost.append(cost_temp)   
-            self.steps = j     
-        #print(self.gd_cost)
-        #print(self.theta)
-
     def run_lbfgs(self, steps, stepsize=0.1, resume = False):
         '''
         Runs qml with torch's lbfgs implementation. Usually converges much quicker than pennylanes standard gradient descent optimizer
@@ -758,19 +617,21 @@ class tictactoe():
         self.check_accuracy(check_batch=self.games_sample)
         self.theta = self.opt.param_groups[0]['params'][0]  
             
-    def check_accuracy(self, check_size = 100, check_batch = None): # TODO: check if accuracy varies for same run
-        # TODO: implement confusion matrix
+    def check_accuracy(self, check_size = None, check_batch = None):
         '''
         checks accuracy of current theta by sampling check_size amount of games for each win
+        NOTE: if check_batch is specified, check 
         '''
+
+        if (check_size is None) and (check_batch is None):
+            raise AttributeError('check_size and check_batch cannot both be None')
+
         if check_batch is None:
             games_check, labels_check = gen_games_sample(check_size, wins=self.wins)
         else: 
             games_check = check_batch
             labels_check = np.tensor([get_label(i) for i in check_batch])
 
-        results = {-1: {}, 0: {}, 1: {}}
-        results_alt = {-1: [], 0: [], 1: []}
         res_circ = []
         res_true = []
 
@@ -778,26 +639,11 @@ class tictactoe():
 
             res_true.append(int(labels_check[i]))
 
-            if self.alt_results:
-                res = full_circ_torch(game, self.theta, self.symmetric, design=self.design, alt_results=True)
+            res = full_circ_torch(game, self.theta, self.symmetric, design=self.design)
 
-                avg_results = get_results(res)
+            avg_results = get_results(res)
 
-                res_circ.append(avg_results.detach().numpy())
-
-            else:
-                if self.interface == 'torch':
-                    res_device = round(float(full_circ_torch(game, self.theta, self.symmetric, design=self.design)), 3)
-                else:
-                    res_device = round(float(full_circ(game, self.theta, self.symmetric, design=self.design)), 3)
-
-                results_alt[res_true[i]].append(res_device)
-                if res_device in results[res_true[i]]:
-                    results[res_true[i]][res_device] += 1
-                else:
-                    results[res_true[i]][res_device] = 1
-
-        #self.results = results
+            res_circ.append(avg_results.detach().numpy())
 
         # check accuracy
         if self.cost_5q:
@@ -818,7 +664,7 @@ class tictactoe():
 
             return self.confusion_matrix
 
-        elif self.alt_results:
+        else:
             # confusion matrix:
             won = [-1, 0, 1]
             res_circ2 = [won[i.argmax()] for i in res_circ]
@@ -828,20 +674,7 @@ class tictactoe():
             print(self.confusion_matrix)
 
             return self.confusion_matrix
-            
-        else:
-            self.accuracy = {-1: {}, 0: {}, 1: {}}
-            self.accuracy[-1] = len([j for j in results_alt[-1] if (j <= -(1/3))])/len(results_alt[-1])
-            self.accuracy[0] = len([j for j in results_alt[0] if ((j > -(1/3)) and (j < 1/3))])/len(results_alt[0])
-            self.accuracy[1] = len([j for j in results_alt[1] if (j >= (1/3))])/len(results_alt[1])
-            print('Accuracy for random sample of {} games: \n\n \t\t -1: {}% \n \t\t  0: {}% \n \t\t  1: {}%'.format(check_size*3, self.accuracy[-1]*100, self.accuracy[0]*100, self.accuracy[1]*100))
-
-    def plot_cost(self):
-        '''
-        plots cost function
-        '''
-        plt.plot(self.gd_cost)
-        plt.show()
+        
 
     def save(self, name, exec_time=0):
         '''
@@ -853,7 +686,7 @@ class tictactoe():
         elif self.interface == 'pennylane':
             params_tmp = self.init_params.numpy()
             theta_tmp = self.theta.numpy()
-        to_save = {'symmetric': self.symmetric, 'alt result': self.alt_results,'accuracy': self.confusion_matrix,'execution time': exec_time, 'steps': self.steps, 'stepsize': self.stepsize, 'design': self.design, 'interface': self.interface, 'cost function': self.gd_cost, 'sample size': self.sample_size, \
+        to_save = {'symmetric': self.symmetric, 'accuracy': self.confusion_matrix,'execution time': exec_time, 'steps': self.steps, 'stepsize': self.stepsize, 'design': self.design, 'interface': self.interface, 'cost function': self.gd_cost, 'sample size': self.sample_size, \
         'initial parameters': params_tmp, 'sampled games': self.games_sample.numpy(), 'theta': theta_tmp}
         if self.epochs:
             to_save['epoch cost'] = self.epoch_cost_function
@@ -869,8 +702,6 @@ class tictactoe():
         except FileNotFoundError:
             os.makedirs(os.getcwd()+'/output/'+name[::-1].split('/', 1)[1][::-1])
             np.save('output/'+name, to_save)
-# TODO: run on cloud/cluster
-# TODO: try different circuits
 
 # %%
 # %%

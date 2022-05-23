@@ -64,19 +64,15 @@ parser.add_argument('-l', "--layout", type=str, default = 'tcemoid',
 parser.add_argument('-f', "--foldername", type=str, default = 'output',
                     help='filename to save') 
 
-parser.add_argument('-lb', "--lbfgs", type=str, default = 'true', # epochs only implemented with lbfgs
-                    help='Use torches lbfgs implementation') 
 
 parser.add_argument('-ss', "--stepsize", type=float, default = 0.008,
                     help='specifies step size of gradient descent optimizer') 
 
-parser.add_argument('-r', "--altresult", type=str, default = 'true',
-                    help='if false, encode result in single qubit \n if true, encode result in grid.  ') 
 
 parser.add_argument('-sr', "--samplerandom", type=str, default = 'false', # not implemented for epochs
                     help='if true, pick new random games for each step') 
 
-parser.add_argument('-w', "--wins", default = "0,1,2",
+parser.add_argument('-w', "--wins", default = "012",
                     help='wins to include in dataset. Seperate numbers with a comma e.g. only including wins for -1 and 0 would look like -1,0. For completely random games set to "R"') 
 
 parser.add_argument('-es', "--excludesymmetry", type=str, default = 'false',
@@ -86,16 +82,13 @@ parser.add_argument('-re', "--repetitions", type=int, default = 7,
                     help='how many times to repeat layout') 
 
 parser.add_argument('-ep', "--epochs", type=str, default = 'true',
-                    help='uses epochs') 
+                    help='uses Adam with epochs by default, when set to False lbfgs is used instead') 
 
 parser.add_argument('-epn', "--epochssize", type=int, default = 10, # actually specifies how many epochs there will be
                     help='number of epochs') 
 
 parser.add_argument('-ce', "--crossentropy", type=str, default = 'false',
                     help='use cross entropy cost function') 
-
-parser.add_argument('-epm', "--epochmult", type=float, default = 1.,
-                    help='how many times to repeat data inside the epoch batch. Can be float.') 
         
 parser.add_argument('-cg', "--controlgate", type=str, default = 'x',
                     help='Use different gate: \
@@ -124,49 +117,19 @@ else:
             gen_games_sample(args.points, output = args.data) # create data file with specified name and size (# of points)
     data_name = args.data
 
-if args.controlgate == 'rx':
-    circuits_ttt.rotation_2q = True
-    circuits_ttt.gate_2q = qml.CRX
-    circuits_ttt.args_symmetric = {'c': 2, 'e': 2, 'o': 1, 'm': 2, 'i': 1, 'd': 1}
-    circuits_ttt.args_asymmetric = {'c': 8, 'e': 8, 'o': 8, 'm': 2, 'i': 4, 'd': 4}
-elif args.controlgate == 'rz':
-    circuits_ttt.rotation_2q = True
-    circuits_ttt.gate_2q = qml.CRZ
-    circuits_ttt.args_symmetric = {'c': 2, 'e': 2, 'o': 1, 'm': 2, 'i': 1, 'd': 1}
-    circuits_ttt.args_asymmetric = {'c': 8, 'e': 8, 'o': 8, 'm': 2, 'i': 4, 'd': 4}
-elif args.controlgate == 'ry':
-    circuits_ttt.rotation_2q = True
-    circuits_ttt.gate_2q = qml.CRY
-    circuits_ttt.args_symmetric = {'c': 2, 'e': 2, 'o': 1, 'm': 2, 'i': 1, 'd': 1}
-    circuits_ttt.args_asymmetric = {'c': 8, 'e': 8, 'o': 8, 'm': 2, 'i': 4, 'd': 4}
-elif args.controlgate == 'x':
-    circuits_ttt.rotation_2q = False
-    circuits_ttt.gate_2q = qml.CNOT
-    circuits_ttt.args_symmetric = {'c': 2, 'e': 2, 'o': 0, 'm': 2, 'i': 0, 'd': 0}
-    circuits_ttt.args_asymmetric = {'c': 8, 'e': 8, 'o': 0, 'm': 2, 'i': 0, 'd': 0}
-elif args.controlgate == 'z':
-    circuits_ttt.rotation_2q = False
-    circuits_ttt.gate_2q = qml.CZ
-    circuits_ttt.args_symmetric = {'c': 2, 'e': 2, 'o': 0, 'm': 2, 'i': 0, 'd': 0}
-    circuits_ttt.args_asymmetric = {'c': 8, 'e': 8, 'o': 0, 'm': 2, 'i': 0, 'd': 0}
-else:
-    raise TypeError
+
+specify_gates(controlstring = args.controlgate)
+
 ###############################################################
 ############## run experiment
 ###############################################################
 
-#filename = args.foldername + f'/r-{args.repetitions}_l-{args.layout}_ss-{args.stepsize}_p-{args.points}_n-{args.num_steps}_s-{args.symmetric}_sr-{args.samplerandom}_wr-{args.winsrandom}-TIME{int(time.time())}'
-#filename = args.foldername + '/' + '-'.join(f'{k}={v}' for k, v in vars(args).items()) + f'-TIME{int(time.time())}' + '-'+str(round(np.random.uniform(), 3))
 filename = args.foldername + '/' + f'TIME{int(time.time())}' + '-'+str(round(np.random.uniform(), 3))
 
 if 'R' in args.wins:
     wins=[]
 else:
-    #wins = [int(i) for i in args.wins.split(' ')]
-    wins = *map(int, args.wins.split(sep=",")),
-    wins = [w-1 for w in wins]
-
-print(f'wins: {wins}\n')
+    wins = [int(i)-1 for i in args.wins]
 
 symm_order = [int(i) for i in args.symmetryqubits]
 circuits_ttt.corner_qubits = symm_order[:4]
@@ -174,18 +137,16 @@ circuits_ttt.edge_qubits = symm_order[4:8]
 circuits_ttt.middle_qubit = [symm_order[8]]
 
 start = timer()
-exp = tictactoe(symmetric=str2bool(args.symmetric), sample_size=args.points, data_file=data_name, design=args.layout, alt_results=str2bool(args.altresult), \
+exp = tictactoe(symmetric=str2bool(args.symmetric), sample_size=args.points, data_file=data_name, design=args.layout, \
     random_sample=str2bool(args.samplerandom), wins=wins, reduced=str2bool(args.excludesymmetry), cross_entropy=str2bool(args.crossentropy))
 
-# TODO from here, each each step seems to take forever. I am not sure whether it's my pennylane installation or whether I did something stupid (Fra)
-exp.random_parameters(1, repetitions=args.repetitions) # select best of 20 random points as starting point
-if str2bool(args.epochs):
-    exp.run_epochs(args.epochssize, args.points, args.num_steps, args.stepsize, args.epochmult, data_name)
-elif str2bool(args.lbfgs):
+exp.random_parameters(repetitions=args.repetitions)
+
+if str2bool(args.epochs): # epochs are only implemented with Adam optimizer
+    exp.run_epochs(args.epochssize, args.points, args.num_steps, args.stepsize, data_name)
+else: # use lbfgs if epochs is set to false
     exp.run_lbfgs(args.num_steps, args.stepsize)
-else:
-    exp.run(args.num_steps)
-    
+
 exp.check_accuracy()
 end = timer()
 exp.save(filename, end - start)
