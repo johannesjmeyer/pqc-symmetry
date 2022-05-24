@@ -132,7 +132,7 @@ start = timer()
 
 # initialize simulation object
 exp = tictactoe(symmetric=str2bool(args.symmetric), design=args.layout, \
-    random_sample=str2bool(args.samplerandom), wins=wins, reduced=str2bool(args.excludesymmetry), loss_fn = args.loss, constrolstring = args.controlgate, symmetrystring = args.symmetryqubits)
+    random_sample=str2bool(args.samplerandom), wins=wins, reduced=str2bool(args.excludesymmetry), loss_fn = args.loss, controlstring = args.controlgate, symmetrystring = args.symmetryqubits)
 
 # create random initial parameters
 exp.random_parameters(repetitions=args.repetitions)

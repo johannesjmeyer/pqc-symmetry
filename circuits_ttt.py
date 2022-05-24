@@ -1,4 +1,3 @@
-# %%
 from cmath import pi
 from http.client import responses
 from tkinter.tix import Y_REGION
@@ -456,7 +455,7 @@ def gen_games_sample(size, wins=[1, 0, -1], output = None):
 
 class tictactoe():
 
-    def __init__(self, symmetric=True, sample_size=5, design="tceocem tceicem tcedcem", random_sample=False, wins = [-1, 0, 1], reduced = False, loss_fn = 'mse', gatestring = 'rx', symmetrystring = '024613578'):
+    def __init__(self, symmetric=True, sample_size=5, design="tceocem tceicem tcedcem", random_sample=False, wins = [-1, 0, 1], reduced = False, loss_fn = 'mse', controlstring = 'rx', symmetrystring = '024613578'):
 
         self.sample_size = sample_size
         self.design = design
@@ -466,9 +465,11 @@ class tictactoe():
         self.epochs = False # used for saving results, turns to True if run_epochs happens
         self.loss_fn = loss_fn
         self.symmetric = symmetric
+        self.controlstring = controlstring
+        self.symmetrystring = symmetrystring
 
         load_data(self.reduced)
-        specify_gates(gatestring)
+        specify_gates(controlstring)
         specify_symmetry(symmetrystring)
 
         if loss_fn == 'mse':
@@ -712,19 +713,19 @@ class tictactoe():
         params_tmp = self.init_params_torch.detach().numpy()
         theta_tmp = self.theta.detach().numpy()
 
-        to_save = {'symmetric': self.symmetric, 'epochs': self.epochs, 'accuracy': self.confusion_matrix,'execution time': exec_time, 'steps': self.steps, 'stepsize': self.stepsize, 'design': self.design, 'interface': self.interface, 'cost function': self.gd_cost, 'sample size': self.sample_size, \
-        'initial parameters': params_tmp, 'theta': theta_tmp}
+        to_save = {'symmetric': self.symmetric, 'epochs': self.epochs, 'symmetrystring': self.symmetrystring, 'controlstring': self.controlstring ,'accuracy': self.confusion_matrix,'execution_time': exec_time, 'steps': self.steps, 'stepsize': self.stepsize, 'design': self.design, 'interface': self.interface, 'cost_function': self.gd_cost, 'sample_size': self.sample_size, \
+        'initial_parameters': params_tmp, 'theta': theta_tmp, }
         if self.epochs:
-            to_save['epoch cost'] = self.epoch_cost_function
-            to_save['epoch accuracy'] = self.epoch_accuracy
-            to_save['epoch batch'] = self.batch
-            to_save['epoch total accuracy'] = self.epoch_total_accuracy
+            to_save['epoch_cost'] = self.epoch_cost_function
+            to_save['epoch_accuracy'] = self.epoch_accuracy
+            to_save['epoch_batch'] = self.batch
+            to_save['epoch_total accuracy'] = self.epoch_total_accuracy
         else:
             to_save['batch'] = self.batch
-            to_save['training accuracy'] = self.training_accuracy
-            to_save['total accuracy'] = self.total_accuracy
+            to_save['training_accuracy'] = self.training_accuracy
+            to_save['total_accuracy'] = self.total_accuracy
             
-        print('Saving results as {}.npy'.format(name))
+        print('Saving results as {}.h5'.format(name))
         try:
             #np.save('output/'+name, to_save)
             #np.save(name, to_save)
