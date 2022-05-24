@@ -10,7 +10,7 @@ from timeit import default_timer as timer
 import os
 from sklearn.metrics import confusion_matrix
 import torch
-#import deepdish as dd
+import deepdish as dd
 
 ###################################################
 ###################################################
@@ -720,9 +720,9 @@ class tictactoe():
         print('Saving results as {}.npy'.format(name))
         try:
             #np.save('output/'+name, to_save)
-            np.save(name, to_save)
-            #dd.io.save(name + '.h5', to_save)
+            #np.save(name, to_save)
+            dd.io.save(name + '.h5', to_save)
         except FileNotFoundError:
             os.makedirs(os.getcwd()+'/output/'+name[::-1].split('/', 1)[1][::-1])
-            np.save('output/'+name, to_save)
-            #dd.io.save('output/' + name + '.h5', to_save)
+            #np.save('output/'+name, to_save)
+            dd.io.save('output/' + name + '.h5', to_save)
