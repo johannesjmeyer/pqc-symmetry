@@ -713,7 +713,7 @@ class tictactoe():
 
     def save(self, name, exec_time=0):
         '''
-        saves result of qml as a npy file. Can be analyzed later
+        saves result of qml as a deepdish .h5 file. Can be analyzed later
         '''
         params_tmp = self.init_params_torch.detach().numpy()
         theta_tmp = self.theta.detach().numpy()
