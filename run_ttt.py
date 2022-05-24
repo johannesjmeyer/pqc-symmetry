@@ -117,9 +117,6 @@ else:
             gen_games_sample(args.points, output = args.data) # create data file with specified name and size (# of points)
     data_name = args.data
 
-
-specify_gates(controlstring = args.controlgate)
-
 ###############################################################
 ############## run experiment
 ###############################################################
@@ -131,17 +128,16 @@ if 'R' in args.wins:
 else:
     wins = [int(i)-1 for i in args.wins]
 
-symm_order = [int(i) for i in args.symmetryqubits]
-circuits_ttt.corner_qubits = symm_order[:4]
-circuits_ttt.edge_qubits = symm_order[4:8]
-circuits_ttt.middle_qubit = [symm_order[8]]
-
 start = timer()
-exp = tictactoe(symmetric=str2bool(args.symmetric), design=args.layout, \
-    random_sample=str2bool(args.samplerandom), wins=wins, reduced=str2bool(args.excludesymmetry), loss_fn = args.loss)
 
+# initialize simulation object
+exp = tictactoe(symmetric=str2bool(args.symmetric), design=args.layout, \
+    random_sample=str2bool(args.samplerandom), wins=wins, reduced=str2bool(args.excludesymmetry), loss_fn = args.loss, constrolstring = args.controlgate, symmetrystring = args.symmetryqubits)
+
+# create random initial parameters
 exp.random_parameters(repetitions=args.repetitions)
 
+# run optimization
 if str2bool(args.epochs): # epochs are only implemented with Adam optimizer
     exp.run_epochs(epochs = args.epochssize, samplesize_per_step = args.points, steps_per_epoch = args.num_steps, stepsize = args.stepsize, data_file = data_name)
 else: # use lbfgs if epochs is set to false
@@ -149,4 +145,5 @@ else: # use lbfgs if epochs is set to false
 
 end = timer()
 exp.save(filename, end - start)
+
 print('Total execution time: {} s'.format(end - start))

@@ -18,7 +18,7 @@ import deepdish as dd
 
 if __name__ == "__main__":
     '''
-    Only relevant if run as main file. Normally these variables are initialized by run_ttt.py
+    Debugging purposes only. Normally these variables are initialized by specify_symmetry and specify_gates
     '''
     args_symmetric = {'c': 2, 'e': 2, 'o': 1, 'm': 2, 'i': 1, 'd': 1}
     args_asymmetric = {'c': 8, 'e': 8, 'o': 8, 'm': 2, 'i': 4, 'd': 4}
@@ -215,7 +215,19 @@ def specify_gates(controlstring):
     else:
         args_symmetric = {'c': 2, 'e': 2, 'o': 0, 'm': 2, 'i': 0, 'd': 0}
         args_asymmetric = {'c': 8, 'e': 8, 'o': 0, 'm': 2, 'i': 0, 'd': 0}
-        
+
+def specify_symmetry(symmetrystring = '024613578'):
+    '''
+    specifies which gates should be treatet equivariantly in the symmetric case
+    '''
+    global corner_qubits
+    global edge_qubits
+    global middle_qubit
+
+    symm_order = [int(i) for i in symmetrystring]
+    corner_qubits = symm_order[:4]
+    edge_qubits = symm_order[4:8]
+    middle_qubit = [symm_order[8]]
 
 def translate_to_parameters(design, symmetric=True):
     '''
@@ -444,7 +456,7 @@ def gen_games_sample(size, wins=[1, 0, -1], output = None):
 
 class tictactoe():
 
-    def __init__(self, symmetric=True, sample_size=5, design="tceocem tceicem tcedcem", random_sample=False, wins = [-1, 0, 1], reduced = False, loss_fn = 'mse'):
+    def __init__(self, symmetric=True, sample_size=5, design="tceocem tceicem tcedcem", random_sample=False, wins = [-1, 0, 1], reduced = False, loss_fn = 'mse', gatestring = 'rx', symmetrystring = '024613578'):
 
         self.sample_size = sample_size
         self.design = design
@@ -453,8 +465,11 @@ class tictactoe():
         self.reduced = reduced
         self.epochs = False # used for saving results, turns to True if run_epochs happens
         self.loss_fn = loss_fn
+        self.symmetric = symmetric
 
         load_data(self.reduced)
+        specify_gates(gatestring)
+        specify_symmetry(symmetrystring)
 
         if loss_fn == 'mse':
             print('using mean squared loss function...')
@@ -467,8 +482,6 @@ class tictactoe():
             self.cost_function = loss_5q
         else:
             raise AttributeError(f'loss function: {loss_fn} not available')
-
-        self.symmetric = symmetric
 
     def random_parameters(self, repetitions=2):
         '''
