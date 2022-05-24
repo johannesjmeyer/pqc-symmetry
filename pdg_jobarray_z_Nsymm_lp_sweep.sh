@@ -11,7 +11,7 @@
 #SBATCH --mail-user=frarzani@physik.fu-berlin.de # Email to which notifications will be sent
 #SBATCH --mail-type=ALL                      # Type of email notification: BEGIN,END,FAIL,ALL
 #
-#SBATCH --array=0-199                 # Array of X jobs id 0..X-1, each using the allocation above, Y of which running concurrently
+#SBATCH --array=0-209                 # Array of X jobs id 0..X-1, each using the allocation above, Y of which running concurrently
                                          # REMEMBER TO CHANGE X DEPENDING ON THE PARAMETERS TO SWEEP
 
 #source /net/opt/spack/buster/spack-dev/opt/linux-debian10-ivybridge/gcc-8.3.0/lmod-8.6.5-vscnztx6cokd2oibqjvon7ykfwf4tumj/lmod/lmod/init/bash
