@@ -59,14 +59,13 @@ def corners(param, symm=True):
     '''
     if symm:
         for i in corner_qubits:
-
             qml.RX(param[0], wires=i)
             qml.RY(param[1], wires=i)
 
     else:
         for n, i in enumerate(corner_qubits):
-            qml.RX(param[i], wires=i)
-            qml.RY(param[i+1], wires=i)
+            qml.RX(param[2*n], wires=i)
+            qml.RY(param[2*n+1], wires=i)
 
     
      # TODO: add ry
@@ -83,14 +82,13 @@ def edges(param, symm=True):
     '''
     if symm:
         for i in edge_qubits:
-
             qml.RX(param[0], wires=i)
             qml.RY(param[1], wires=i)
 
     else:
         for n, i in enumerate(edge_qubits):
-            qml.RX(param[i-1], wires=i)
-            qml.RY(param[i], wires=i)
+            qml.RX(param[2*n], wires=i)
+            qml.RY(param[2*n + 1], wires=i)
     
     
 def center(param):
@@ -353,7 +351,7 @@ def loss_5q(circ, params, games, symmetric, design):
     for i, g in enumerate(games):
         result = circ(g, params, symmetric, design=design)
         label = get_label(g)
-        y_g = get_results(result)
+        y_g = get_results_no_normalizing(result)
 
         if label == 0:
             loss += (y_g[1]-1)**2
@@ -370,7 +368,7 @@ def loss_5q(circ, params, games, symmetric, design):
 def get_results_no_normalizing(result):
     '''
     takes 9 qubits exp values and averages edges (4q)/corners (4q)/center (1q), returns 3d vector
-    only used for cross-entropy loss function
+    only used for cross-entropy and 5q loss function
     '''
     # THIS SHOULD ALREADY BE GOOD FOR TORCH (CE)
     avg_result = []
@@ -446,7 +444,7 @@ def gen_games_sample(size, wins=[1, 0, -1], output = None):
 
 class tictactoe():
 
-    def __init__(self, symmetric=True, sample_size=5, design="tceocem tceicem tcedcem", random_sample=False, wins = [-1, 0, 1], reduced = False, loss_fn):
+    def __init__(self, symmetric=True, sample_size=5, design="tceocem tceicem tcedcem", random_sample=False, wins = [-1, 0, 1], reduced = False, loss_fn = 'mse'):
 
         self.sample_size = sample_size
         self.design = design
@@ -454,7 +452,7 @@ class tictactoe():
         self.wins = wins
         self.reduced = reduced
         self.epochs = False # used for saving results, turns to True if run_epochs happens
-        self.loss = loss_fn
+        self.loss_fn = loss_fn
 
         load_data(self.reduced)
 
@@ -579,8 +577,8 @@ class tictactoe():
         Runs qml with torch's lbfgs implementation. Usually converges much quicker than pennylanes standard gradient descent optimizer
         '''
         print('running lbfgs...')
-        print(tabulate([['steps', steps], ['stepsize', stepsize], ['symmetric', self.symmetric], ['design', self.design], ['sample size', len(self.games_sample)], \
-            ['random sample', self.random], ['repetitions', self.repetitions], ['wins', self.wins]]))
+        print(tabulate([['steps', steps], ['stepsize', stepsize], ['symmetric', self.symmetric], ['design', self.design], ['sample size', size], \
+            ['random sample', self.random], ['repetitions', self.repetitions], ['wins', self.wins], ['corners', corner_qubits], ['edges', edge_qubits], ['center', middle_qubit]]))
        
         self.epochs = False
         self.interface = 'torch'
@@ -610,14 +608,16 @@ class tictactoe():
             loss.backward()
             return loss
 
+        print(f'step 0/{steps} training accuracy:')
         self.training_accuracy.append(self.check_accuracy(check_batch=self.batch))
+        print(f'step 0/{steps} test accuracy:')
         self.total_accuracy.append(self.check_accuracy(check_batch=self.test_batch))
 
-        for j in range(steps):
+        for j in range(1, steps+1):
 
             cost_temp = self.cost_function(full_circ_torch, self.opt.param_groups[0]['params'][0],self.batch, self.symmetric, self.design)
             
-            print(f"step {j}/{steps} current cost value: {cost_temp} execution time: {step_end-step_start}s")
+            print(f"step {j-1}/{steps} current cost value: {cost_temp} execution time: {step_end-step_start}s")
             
             step_start = timer()
             self.opt.step(closure)
@@ -628,7 +628,9 @@ class tictactoe():
 
             self.gd_cost.append(cost_temp) 
             self.theta = self.opt.param_groups[0]['params'][0]
+            print(f'step {j}/{steps} training accuracy:')
             self.training_accuracy.append(self.check_accuracy(check_batch=self.batch))
+            print(f'step {j}/{steps} test accuracy:')
             self.total_accuracy.append(self.check_accuracy(check_batch=self.test_batch))
 
             self.steps = j
@@ -668,9 +670,9 @@ class tictactoe():
             # accuracy for loss_5q
             y_g = []
             for i in y_g_raw:
-                if i[1] < 0:
+                if i[1] > 0.5:
                     y_g.append(0)
-                elif i[0] > 0:
+                elif i[0] > 0.5:
                     y_g.append(1)
                 else: 
                     y_g.append(-1)
@@ -685,8 +687,8 @@ class tictactoe():
 
         else:
             # accufacy for loss_MSE and loss_CE
-            labekls = [-1, 0, 1]
-            y_g = [labels[i.argmax()] for i in y_g_raw]
+            win_labels = [-1, 0, 1]
+            y_g = [win_labels[i.argmax()] for i in y_g_raw]
             self.confusion_matrix = confusion_matrix(y, y_g, normalize='true')
             self.accuracy = self.confusion_matrix.trace()/3
 
