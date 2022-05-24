@@ -490,12 +490,6 @@ class tictactoe():
         self.repetitions = repetitions
         self.init_params_torch = random_params(repetitions, self.symmetric, self.design)
 
-    def sample_games(self, size):
-        '''
-        Create random samples with equal amount of wins for X, O and 0
-        '''
-        self.games_sample , self.label_sample = gen_games_sample(size, wins=self.wins)
-
     def load_games(self, data_file, size):
         '''
         Loads games and label from file specified by data_file. The first size data points are retained.
