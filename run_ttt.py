@@ -147,7 +147,7 @@ if str2bool(args.epochs): # epochs are only implemented with Adam optimizer
 else: # use lbfgs if epochs is set to false
     exp.run_lbfgs(args.num_steps, args.stepsize)
 
-exp.check_accuracy()
+exp.check_accuracy(check_batch = exp.test_batch)
 end = timer()
 exp.save(filename, end - start)
 print('Total execution time: {} s'.format(end - start))
