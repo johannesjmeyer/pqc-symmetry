@@ -60,17 +60,14 @@ parser.add_argument('-l', "--layout", type=str, default = 'tcemoid',
                     \n i: inner layer  -- 2q trainable\
                     \nd: diagonal layer -- 2q trainable') 
                 
-
 parser.add_argument('-f', "--foldername", type=str, default = 'output',
-                    help='filename to save') 
-
+                    help='foldername to save') 
 
 parser.add_argument('-ss', "--stepsize", type=float, default = 0.008,
                     help='specifies step size of gradient descent optimizer') 
 
-
 parser.add_argument('-sr', "--samplerandom", type=str, default = 'false', # not implemented for epochs
-                    help='if true, pick new random games for each step') 
+                    help='if true, pick new random games for each step. Only relevant if no epochs are used') 
 
 parser.add_argument('-w', "--wins", default = "012",
                     help='wins to include in dataset. Seperate numbers with a comma e.g. only including wins for -1 and 0 would look like -1,0. For completely random games set to "R"') 
@@ -87,8 +84,11 @@ parser.add_argument('-ep', "--epochs", type=str, default = 'true',
 parser.add_argument('-epn', "--epochssize", type=int, default = 10, # actually specifies how many epochs there will be
                     help='number of epochs') 
 
-parser.add_argument('-ce', "--crossentropy", type=str, default = 'false',
-                    help='use cross entropy cost function') 
+parser.add_argument('-lf', "--loss", type=str, default = 'mse',
+                    help='specifies loss function use \
+                        mse: mean squared error \
+                        ce: cross entropy \
+                        5q: 5 qubit mse') 
         
 parser.add_argument('-cg', "--controlgate", type=str, default = 'x',
                     help='Use different gate: \
@@ -117,9 +117,6 @@ else:
             gen_games_sample(args.points, output = args.data) # create data file with specified name and size (# of points)
     data_name = args.data
 
-
-specify_gates(controlstring = args.controlgate)
-
 ###############################################################
 ############## run experiment
 ###############################################################
@@ -131,23 +128,22 @@ if 'R' in args.wins:
 else:
     wins = [int(i)-1 for i in args.wins]
 
-symm_order = [int(i) for i in args.symmetryqubits]
-circuits_ttt.corner_qubits = symm_order[:4]
-circuits_ttt.edge_qubits = symm_order[4:8]
-circuits_ttt.middle_qubit = [symm_order[8]]
-
 start = timer()
-exp = tictactoe(symmetric=str2bool(args.symmetric), sample_size=args.points, data_file=data_name, design=args.layout, \
-    random_sample=str2bool(args.samplerandom), wins=wins, reduced=str2bool(args.excludesymmetry), cross_entropy=str2bool(args.crossentropy))
 
+# initialize simulation object
+exp = tictactoe(symmetric=str2bool(args.symmetric), design=args.layout, \
+    random_sample=str2bool(args.samplerandom), wins=wins, reduced=str2bool(args.excludesymmetry), loss_fn = args.loss, controlstring = args.controlgate, symmetrystring = args.symmetryqubits)
+
+# create random initial parameters
 exp.random_parameters(repetitions=args.repetitions)
 
+# run optimization
 if str2bool(args.epochs): # epochs are only implemented with Adam optimizer
-    exp.run_epochs(args.epochssize, args.points, args.num_steps, args.stepsize, data_name)
+    exp.run_epochs(epochs = args.epochssize, samplesize_per_step = args.points, steps_per_epoch = args.num_steps, stepsize = args.stepsize, data_file = data_name)
 else: # use lbfgs if epochs is set to false
-    exp.run_lbfgs(args.num_steps, args.stepsize)
+    exp.run_lbfgs(size = args.points, steps = args.num_steps, stepsize = args.stepsize, data_file = data_name)
 
-exp.check_accuracy(check_batch = exp.test_batch)
 end = timer()
 exp.save(filename, end - start)
+
 print('Total execution time: {} s'.format(end - start))

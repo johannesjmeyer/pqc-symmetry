@@ -1,6 +1,6 @@
-# %%
 from cmath import pi
 from http.client import responses
+from tkinter.tix import Y_REGION
 import pennylane as qml
 from pennylane import numpy as np
 from tictactoe import *
@@ -9,13 +9,16 @@ from timeit import default_timer as timer
 import os
 from sklearn.metrics import confusion_matrix
 import torch
-#import deepdish as dd
+import deepdish as dd
 
 ###################################################
 ###################################################
 ###################################################
 
 if __name__ == "__main__":
+    '''
+    Debugging purposes only. Normally these variables are initialized by specify_symmetry and specify_gates
+    '''
     args_symmetric = {'c': 2, 'e': 2, 'o': 1, 'm': 2, 'i': 1, 'd': 1}
     args_asymmetric = {'c': 8, 'e': 8, 'o': 8, 'm': 2, 'i': 4, 'd': 4}
     gate_2q = qml.CRX
@@ -45,39 +48,57 @@ def data_encoding(game):
 def corners(param, symm=True):
     '''
     applies RX an RZ gates on corners
+
+    default:
+        0    -    2
+                
+        -    -    -
+                
+        6    -    4
     '''
     if symm:
         for i in corner_qubits:
-
             qml.RX(param[0], wires=i)
             qml.RY(param[1], wires=i)
 
     else:
         for n, i in enumerate(corner_qubits):
-            qml.RX(param[i], wires=i)
-            qml.RY(param[i+1], wires=i)
+            qml.RX(param[2*n], wires=i)
+            qml.RY(param[2*n+1], wires=i)
 
     
      # TODO: add ry
 def edges(param, symm=True):
     '''
     applies RX an RZ gates on edges
+
+    default:
+        -    1    -
+               
+        7    -    3
+                
+        -    5    -
     '''
     if symm:
         for i in edge_qubits:
-
             qml.RX(param[0], wires=i)
             qml.RY(param[1], wires=i)
 
     else:
         for n, i in enumerate(edge_qubits):
-            qml.RX(param[i-1], wires=i)
-            qml.RY(param[i], wires=i)
+            qml.RX(param[2*n], wires=i)
+            qml.RY(param[2*n + 1], wires=i)
     
     
 def center(param):
     '''
     applies RX an RZ gate on the middle qubit
+    default:
+        -    -    -
+                
+        -    8    -
+                
+        -    -    -
     '''
     qml.RX(param[0], wires=middle_qubit[0])
     qml.RY(param[1], wires=middle_qubit[0])
@@ -86,11 +107,13 @@ def center(param):
 def outer_layer(param, symm=True):
     '''
     entangles nearest neighboar qubits of the outer layer of the tictactoe board
-    0  - 1 -  2
-    |         |
-    7    8    3
-    |         |
-    6  - 5 -  4
+
+    default:
+        0  - 1 -  2
+        |         |
+        7    8    3
+        |         |
+        6  - 5 -  4
     '''
     """"""
     if rotation_2q:
@@ -111,11 +134,13 @@ def outer_layer(param, symm=True):
 def inner_layer(param, symm=True):
     '''
     entangles center qubit with edge qubits
-    0    1    2
-         |
-    7  - 8 -  3
-         |
-    6    5    4
+
+    default:
+        0    1    2
+            |
+        7  - 8 -  3
+            |
+        6    5    4
     '''
     if rotation_2q:
         if symm:
@@ -132,11 +157,13 @@ def inner_layer(param, symm=True):
 def diag_layer(param, symm=True):
     '''
     entangles center qubit with corner qubits
-    0    1    2 
-      \     /
-    7    8    3
-      /     \ 
-    6    5    4
+
+    default:
+        0    1    2 
+        \     /
+        7    8    3
+        /     \ 
+        6    5    4
     '''
     if rotation_2q:
         if symm:
@@ -187,67 +214,41 @@ def specify_gates(controlstring):
     else:
         args_symmetric = {'c': 2, 'e': 2, 'o': 0, 'm': 2, 'i': 0, 'd': 0}
         args_asymmetric = {'c': 8, 'e': 8, 'o': 0, 'm': 2, 'i': 0, 'd': 0}
-        
 
+def specify_symmetry(symmetrystring = '024613578'):
+    '''
+    specifies which gates should be treatet equivariantly in the symmetric case
+    '''
+    global corner_qubits
+    global edge_qubits
+    global middle_qubit
 
+    symm_order = [int(i) for i in symmetrystring]
+    corner_qubits = symm_order[:4]
+    edge_qubits = symm_order[4:8]
+    middle_qubit = [symm_order[8]]
 
 def translate_to_parameters(design, symmetric=True):
     '''
-    Translates circuit design string to number of required parameters in the form of a list corresponding to each applied layer
+    translates design string to list of numbers of parameter for each sub layer for symmetric or asymnetric case
     '''
     param_args = [0]
     if symmetric:
-
-        for i in design.replace(" ", ""):
-            if i == 't':
-                # encode data
-                param_args.append(param_args[-1])
-            elif i == 'c':
-                # corners
-                param_args.append(param_args[-1]+args_symmetric['c'])
-            elif i == 'e':
-                # edges
-                param_args.append(param_args[-1]+args_symmetric['e'])
-            elif i == 'o':
-                # outer layer
-                param_args.append(param_args[-1]+args_symmetric['o'])
-            elif i == 'm':
-                # center
-                param_args.append(param_args[-1]+args_symmetric['m'])
-            elif i == 'i':
-                # inner layer
-                param_args.append(param_args[-1]+args_symmetric['i'])
-            elif i == 'd':
-                # diagonal layer
-                param_args.append(param_args[-1]+args_symmetric['d'])
+        args = args_asymmetric
     else:
-        
-        for i in design.replace(" ", ""):
-            if i == 't':
-                # encode data
-                param_args.append(param_args[-1])
-            elif i == 'c':
-                # corners
-                param_args.append(param_args[-1]+args_asymmetric['c'])
-            elif i == 'e':
-                # edges
-                param_args.append(param_args[-1]+args_asymmetric['e'])
-            elif i == 'o':
-                # outer layer
-                param_args.append(param_args[-1]+args_asymmetric['o'])
-            elif i == 'm':
-                # center
-                param_args.append(param_args[-1]+args_asymmetric['m'])
-            elif i == 'i':
-                # inner layer
-                param_args.append(param_args[-1]+args_asymmetric['i'])
-            elif i == 'd':
-                # diagonal layer
-                param_args.append(param_args[-1]+args_asymmetric['d'])
-        
-    return param_args
+        args = args_asymmetric
 
-def circuit(game, params, symmetric, design="tceocem tceicem tcedcem"):
+    for i in design.replace(" ", ""):
+        if i == 't':
+            # encode data
+            param_args.append(param_args[-1])
+        else:
+            # layer 'i'
+            param_args.append(param_args[-1]+args[i])
+
+    return param_args  
+
+def circuit(game, params, symmetric, design="tcemoid"):
         '''
         prepares the all zero comp basis state then iterates through encoding and layers
         encoding and layers are defined by design argument
@@ -288,6 +289,7 @@ def circuit(game, params, symmetric, design="tceocem tceicem tcedcem"):
 
         return [qml.expval(qml.PauliZ(i)) for i in range(9)]
 
+# TODO: lightning.qubit only seems to work with linux. Add warning?
 
 #ttt_dev = qml.device("default.qubit", wires=9) # the device used to label ttt instances 
 ttt_dev = qml.device("lightning.qubit", wires=9) # ligthing.qubit is an optimized version of default.qubit
@@ -301,42 +303,43 @@ full_circ_torch = qml.QNode(circuit, ttt_dev, interface='torch', diff_method="ad
 ###################################################
 ###################################################
 
-
 rng = np.random.default_rng()
 # rng = np.random.default_rng(2021) # for reproducible results
 
 ############################
 
-def random_params(repetitions, symmetric, design, enable_torch=False):
+def random_params(repetitions, symmetric, design):
     '''
     returns array/torch tensor of paramters for amount of repetitions and circuit design
     '''
     params = rng.uniform(low=-1, high=1, size=(repetitions,translate_to_parameters(design, symmetric)[-1]))
-    if enable_torch:
-        return torch.tensor(params, requires_grad = True)
-    else: 
-        return np.array(params, requires_grad = True)
+
+    return torch.tensor(params, requires_grad = True)
 
 
-def cost_function_alt_batch(circ, params, games, symmetric, design="tceocem tceicem tcedcem"):
-    
-    final_results = torch.zeros(len(games))
+def loss_MSE(circ, params, games, symmetric, design="tceocem tceicem tcedcem"):
+    '''
+    computes the mean squared loss of given games and parameters
+    '''
+    L = torch.zeros(len(games))
     for i, g in enumerate(games):  # TODO: implement multiprocessing with pool here
 
         result = circ(g,params, symmetric, design=design)
         label = get_label(g)
         
-        won = torch.zeros(3)
-        won[label+1] = 1
+        y = torch.zeros(3)
+        y[label+1] = 1
 
-        avg_result = get_results(result)
+        y_g = get_results(result)
 
-        final_results[i] = torch.sum((avg_result - won)**2)
+        L[i] = torch.sum((y_g - y)**2)
 
-    return torch.mean(final_results)
+    return torch.mean(L)
 
-def cross_entropy_cost_batch(circ, params, games, symmetric, design):
-
+def loss_CE(circ, params, games, symmetric, design):
+    '''
+    computes the cross entropy loss of given games and parameters
+    '''
     loss = torch.nn.CrossEntropyLoss()
     input = torch.zeros((len(games), 3))
     target = torch.zeros(len(games), dtype=torch.long)
@@ -348,20 +351,25 @@ def cross_entropy_cost_batch(circ, params, games, symmetric, design):
     return loss(input, target)
 
 
-def cost_fn_5q(circ, params, games, symmetric, design):
-
+def loss_5q(circ, params, games, symmetric, design):
+    '''
+    computes custom mean squared loss of given games and parameters only on 5 qubits
+    Tie/Win is encoded in middle qubit (Z_8 > 0 --> Tie, Z_8 < 0 --> Win)
+    If Tie, all other results are ignored.
+    If Win, win for X or O is encoded in corner qubits (Z_c > 0 --> X, Z_c < 0 --> O)
+    '''
     loss = 0
-    for i, g in enumerate(games):  # TODO: implement multiprocessing with pool here
-        result = circ(g,params, symmetric, design=design)
+    for i, g in enumerate(games):
+        result = circ(g, params, symmetric, design=design)
         label = get_label(g)
-        avg_result = get_results(result)
+        y_g = get_results_no_normalizing(result)
 
         if label == 0:
-            loss += (avg_result[1]-1)**2
+            loss += (y_g[1]-1)**2
         elif label == 1:
-            loss += ((avg_result[1]+1)**2 + (avg_result[0]-1)**2)/2
+            loss += ((y_g[1]+1)**2 + (y_g[0]-1)**2)/2
         elif label == -1:
-            loss += ((avg_result[1]+1)**2 + (avg_result[0]+1)**2)/2
+            loss += ((y_g[1]+1)**2 + (y_g[0]+1)**2)/2
         else:
             raise TypeError('game has no label')      
 
@@ -371,7 +379,7 @@ def cost_fn_5q(circ, params, games, symmetric, design):
 def get_results_no_normalizing(result):
     '''
     takes 9 qubits exp values and averages edges (4q)/corners (4q)/center (1q), returns 3d vector
-    only used for cross-entropy loss function
+    only used for cross-entropy and 5q loss function
     '''
     # THIS SHOULD ALREADY BE GOOD FOR TORCH (CE)
     avg_result = []
@@ -394,40 +402,47 @@ def get_results(result):
 
     return result
 
-games_data,labels = get_data()
-games_data_reduced, labels_reduced = get_data_symmetric()
-
-def gen_games_sample(size, wins=[1, 0, -1], output = None, reduced=False, truesize=False):
+def load_data(reduced):
+    '''Loads all games and labels into global namespace
+    reduced : bool
+        if true, only loads games that are unique in symmetry group
     '''
-    Generates Tensor with 3*size games that are won equally by X, O and 0
+    global games_data, labels
+    if reduced:
+        games_data, labels = get_data_symmetric()
+    else:
+        games_data,labels = get_data()
+
+def gen_games_sample(size, wins=[1, 0, -1], output = None):
+    '''Generates Tensor with size games that are won equally by X, O and 0
     If the parameter output is a string instead of "None", the sample is stored in a npz file named after the string
 
-    param wins: list of wins to be included in sample. If empty, returns completely random sample.
-
-    NOTE: truesize is only used for lbfgs, otherwise the number of games in the set is fixed in the case of epochs
+    size : int
+        amout of games sampled
+    wins : list
+        list of wins to be included in sample. If empty, returns completely random sample.
+    output : str (optional)
+        if spceified, saves generated games as .npz file
     '''
     sample = []
     sample_label = []
-    #print('Generating new samples...')
-    if reduced:
-        data = games_data_reduced
-        data_labels = labels_reduced
-    else: 
-        data = games_data
-        data_labels = labels
-    if wins:
-        if truesize:
-            partial_size = int(np.ceil(size/(len(wins))))
-            for j in wins:
-                sample += list(rng.choice(data[data_labels == j], partial_size,replace=False))
-                sample_label += partial_size*[j]
 
-            sample = sample[:size]
-            sample_label = sample_label[:size]
-        else:
-            for j in wins:
-                sample += list(rng.choice(data[data_labels == j], size, replace=False))
-                sample_label += size*[j]
+    data = games_data
+    data_labels = labels
+
+    if wins:
+        partial_size = int(np.ceil(size/(len(wins))))
+
+        for j in wins:
+            sample += list(rng.choice(data[data_labels == j], partial_size,replace=False))
+            sample_label += partial_size*[j]
+
+        if len(sample) != size:
+            print('Warning: size is not a multiple of len(wins), uneven distribution of games!')
+
+        sample = sample[:size]
+        sample_label = sample_label[:size]
+    
     else:
         sample += list(rng.choice(data, size,replace=False))
         sample_label = [get_label(g) for g in sample]
@@ -436,12 +451,11 @@ def gen_games_sample(size, wins=[1, 0, -1], output = None, reduced=False, truesi
         with open('samples/'+output+'.npz', 'wb') as f:
                 np.savez(f,sample=sample)#, sample_label = sample_label)
 
-
     return np.tensor(sample, requires_grad=False), np.tensor(sample_label, requires_grad=False)
 
 class tictactoe():
 
-    def __init__(self, symmetric=True, sample_size=5, design="tceocem tceicem tcedcem", data_file=None, random_sample=False, wins = [-1, 0, 1], reduced = False, cross_entropy = False, cost_5q=False):
+    def __init__(self, symmetric=True, sample_size=5, design="tceocem tceicem tcedcem", random_sample=False, wins = [-1, 0, 1], reduced = False, loss_fn = 'mse', controlstring = 'rx', symmetrystring = '024613578'):
 
         self.sample_size = sample_size
         self.design = design
@@ -449,38 +463,33 @@ class tictactoe():
         self.wins = wins
         self.reduced = reduced
         self.epochs = False # used for saving results, turns to True if run_epochs happens
-        self.cost_5q = cost_5q
-
-        if cross_entropy:
-            print('using cross entropy cost function...')
-            self.cost_function = cross_entropy_cost_batch
-        elif cost_5q:
-            print('using 5q cost function...')
-            self.cost_function = cost_fn_5q
-        else:
-            print('using mean squared cost function...')
-            self.cost_function = cost_function_alt_batch
-
-        if data_file is None:
-            self.sample_games(sample_size)
-        else:
-            self.load_games(data_file, sample_size) # loads games and labels from file
-
+        self.loss_fn = loss_fn
         self.symmetric = symmetric
+        self.controlstring = controlstring
+        self.symmetrystring = symmetrystring
+
+        load_data(self.reduced)
+        specify_gates(controlstring)
+        specify_symmetry(symmetrystring)
+
+        if loss_fn == 'mse':
+            print('using mean squared loss function...')
+            self.cost_function = loss_MSE
+        elif loss_fn == 'ce':
+            print('using cross entropy loss function...')
+            self.cost_function = loss_CE
+        elif loss_fn == '5q':
+            print('using 5q loss function...')
+            self.cost_function = loss_5q
+        else:
+            raise AttributeError(f'loss function: {loss_fn} not available')
 
     def random_parameters(self, repetitions=2):
         '''
         sets random parameters for circuit design and amount of repetitions
         '''
         self.repetitions = repetitions
-        self.init_params_torch = random_params(repetitions, self.symmetric, self.design, True)
-        self.init_params = random_params(repetitions, self.symmetric, self.design)
-
-    def sample_games(self, size):
-        '''
-        Create random samples with equal amount of wins for X, O and 0
-        '''
-        self.games_sample , self.label_sample = gen_games_sample(size, wins=self.wins, reduced = self.reduced)
+        self.init_params_torch = random_params(repetitions, self.symmetric, self.design)
 
     def load_games(self, data_file, size):
         '''
@@ -491,11 +500,11 @@ class tictactoe():
         try:
             with open('samples/'+data_file+'.npz', 'rb') as f:
                             print('Loading data file \n')
-                            self.games_sample = np.tensor(np.load(f, allow_pickle = True)['sample'][:size*3], requires_grad=False)
+                            return np.tensor(np.load(f, allow_pickle = True)['sample'][:size], requires_grad=False)
                             #self.label_sample = np.tensor(np.load(f, allow_pickle = True)['sample_label'][:size*3], requires_grad=False)
         except IOError: 
             print('Data sample not found, creating new one')
-            self.sample_games(size)
+            return gen_games_sample(size = 600, wins = self.wins)[0]
 
 
     def run_epochs(self, epochs, samplesize_per_step, steps_per_epoch, stepsize, data_file = None):
@@ -508,16 +517,14 @@ class tictactoe():
 
         self.epochs = True
         if data_file is None:
-            self.batch = gen_games_sample(size = steps_per_epoch*samplesize_per_step, truesize = True, reduced = self.reduced, wins=self.wins)[0]
+            self.batch = gen_games_sample(size = steps_per_epoch*samplesize_per_step, wins=self.wins)[0]
             
         else:
-            with open('samples/'+data_file+'.npz', 'rb') as f:
-                            print('Loading data file \n')
-                            self.batch = np.tensor(np.load(f, allow_pickle = True)['sample'], requires_grad=False)
+            self.batch = self.load_games(data_file, size = steps_per_epoch*samplesize_per_step)
 
-        self.test_batch = gen_games_sample(size = 600, truesize = True, reduced = self.reduced, wins = self.wins)[0]
+        self.test_batch = gen_games_sample(size = 600, wins = self.wins)[0]
 
-        np.random.shuffle(self.batch)
+        rng.shuffle(self.batch)
 
         self.interface = 'torch'
 
@@ -559,7 +566,7 @@ class tictactoe():
                 self.gd_cost.append(cost_temp) 
                 self.steps = j
             
-            np.random.shuffle(self.batch)
+            rng.shuffle(self.batch)
             print(f'unique games: {len(np.unique(self.batch, axis=0))}')
             self.theta = self.opt.param_groups[0]['params'][0]  
             print(f'epoch {i}/{epochs} accuracy:')
@@ -573,54 +580,78 @@ class tictactoe():
         print('Done')
         self.theta = self.opt.param_groups[0]['params'][0]  
 
-    def run_lbfgs(self, steps, stepsize=0.1, resume = False):
+    def run_lbfgs(self, size, steps, stepsize=0.1, data_file = None, resume = False):
         '''
         Runs qml with torch's lbfgs implementation. Usually converges much quicker than pennylanes standard gradient descent optimizer
         '''
         print('running lbfgs...')
-        print(tabulate([['steps', steps], ['stepsize', stepsize], ['symmetric', self.symmetric], ['design', self.design], ['sample size', len(self.games_sample)], \
-            ['random sample', self.random], ['repetitions', self.repetitions], ['wins', self.wins]]))
-
+        print(tabulate([['steps', steps], ['stepsize', stepsize], ['symmetric', self.symmetric], ['design', self.design], ['sample size', size], \
+            ['random sample', self.random], ['repetitions', self.repetitions], ['wins', self.wins], ['corners', corner_qubits], ['edges', edge_qubits], ['center', middle_qubit]]))
+       
+        self.epochs = False
         self.interface = 'torch'
         if not resume:
             self.gd_cost = []
             self.theta = self.init_params_torch
+            self.total_accuracy = []
+            self.training_accuracy = []
+
+        if data_file is None:
+            self.batch = gen_games_sample(size = size, wins = self.wins)[0]
+        else:
+            self.batch = self.load_games(data_file, size) # loads games and labels from file
+        
+
+
+        self.test_batch = gen_games_sample(size = 600, wins = self.wins)[0]
 
         self.opt = torch.optim.LBFGS([self.theta], lr=stepsize)
         self.stepsize = stepsize
+        step_start = 0
+        step_end = 0
 
         def closure():
             self.opt.zero_grad()
-            loss = self.cost_function(full_circ_torch, self.theta, self.games_sample, self.symmetric, self.design)
+            loss = self.cost_function(full_circ_torch, self.theta, self.batch, self.symmetric, self.design)
             loss.backward()
             return loss
 
-        step_start = 0
-        step_end = 0
-        
-        for j in range(steps):
-            cost_temp = self.cost_function(full_circ_torch, self.opt.param_groups[0]['params'][0],self.games_sample, self.symmetric, self.design)
-            print(f"step {j}/{steps} current cost value: {cost_temp} execution time: {step_end-step_start}s")
+        print(f'step 0/{steps} training accuracy:')
+        self.training_accuracy.append(self.check_accuracy(check_batch=self.batch))
+        print(f'step 0/{steps} test accuracy:')
+        self.total_accuracy.append(self.check_accuracy(check_batch=self.test_batch))
+
+        for j in range(1, steps+1):
+
+            cost_temp = self.cost_function(full_circ_torch, self.opt.param_groups[0]['params'][0],self.batch, self.symmetric, self.design)
+            
+            print(f"step {j-1}/{steps} current cost value: {cost_temp} execution time: {step_end-step_start}s")
+            
             step_start = timer()
             self.opt.step(closure)
             step_end = timer()
             # Samples new games for every step
             if self.random:
-                self.sample_games(self.sample_size)
+                self.batch = gen_games_sample(size = self.size, wins = self.wins)[0]
 
             self.gd_cost.append(cost_temp) 
+            self.theta = self.opt.param_groups[0]['params'][0]
+            print(f'step {j}/{steps} training accuracy:')
+            self.training_accuracy.append(self.check_accuracy(check_batch=self.batch))
+            print(f'step {j}/{steps} test accuracy:')
+            self.total_accuracy.append(self.check_accuracy(check_batch=self.test_batch))
+
             self.steps = j
         
-        cost_temp = self.cost_function(full_circ_torch ,self.opt.param_groups[0]['params'][0],self.games_sample, self.symmetric, self.design)
+        cost_temp = self.cost_function(full_circ_torch ,self.opt.param_groups[0]['params'][0],self.batch, self.symmetric, self.design)
+        self.gd_cost.append(cost_temp)
         print(f"final step current cost value: {cost_temp}")
-        print('accuracy on training data set:')
-        self.check_accuracy(check_batch=self.games_sample)
+
         self.theta = self.opt.param_groups[0]['params'][0]  
-            
+
     def check_accuracy(self, check_size = None, check_batch = None):
         '''
-        checks accuracy of current theta by sampling check_size amount of games for each win
-        NOTE: if check_batch is specified, check 
+        checks accuracy of current theta on check_batch OR by sampling check_size amount of games for each win
         '''
 
         if (check_size is None) and (check_batch is None):
@@ -632,44 +663,43 @@ class tictactoe():
             games_check = check_batch
             labels_check = np.tensor([get_label(i) for i in check_batch])
 
-        res_circ = []
-        res_true = []
+        y_g_raw = []
+        y = []
 
         for i, game in enumerate(games_check):
 
-            res_true.append(int(labels_check[i]))
+            y.append(int(labels_check[i]))
 
-            res = full_circ_torch(game, self.theta, self.symmetric, design=self.design)
+            res = get_results(full_circ_torch(game, self.theta, self.symmetric, design=self.design)).detach().numpy()
 
-            avg_results = get_results(res)
+            y_g_raw.append(res)
 
-            res_circ.append(avg_results.detach().numpy())
-
-        # check accuracy
-        if self.cost_5q:
-            won = [-1, 0, 1]
-            res_circ2 = []
-            for i in res_circ:
-                if i[1] < 0:
-                    res_circ2.append(0)
-                elif i[0] > 0:
-                    res_circ2.append(1)
+        if self.loss_fn == '5q':
+            # accuracy for loss_5q
+            y_g = []
+            for i in y_g_raw:
+                if i[1] > 0.5:
+                    y_g.append(0)
+                elif i[0] > 0.5:
+                    y_g.append(1)
                 else: 
-                    res_circ.append(-1)
+                    y_g.append(-1)
 
-            self.confusion_matrix = confusion_matrix(res_true, res_circ2, normalize='true')
+            self.confusion_matrix = confusion_matrix(y, y_g, normalize='true')
             self.accuracy = self.confusion_matrix.trace()/3
+
             print('Confusion matrix:')
             print(self.confusion_matrix)
 
             return self.confusion_matrix
 
         else:
-            # confusion matrix:
-            won = [-1, 0, 1]
-            res_circ2 = [won[i.argmax()] for i in res_circ]
-            self.confusion_matrix = confusion_matrix(res_true, res_circ2, normalize='true')
+            # accufacy for loss_MSE and loss_CE
+            win_labels = [-1, 0, 1]
+            y_g = [win_labels[i.argmax()] for i in y_g_raw]
+            self.confusion_matrix = confusion_matrix(y, y_g, normalize='true')
             self.accuracy = self.confusion_matrix.trace()/3
+
             print('Confusion matrix:')
             print(self.confusion_matrix)
 
@@ -678,30 +708,29 @@ class tictactoe():
 
     def save(self, name, exec_time=0):
         '''
-        saves result of qml as a npy file. Can be analyzed later
+        saves result of qml as a deepdish .h5 file. Can be analyzed later
         '''
-        if self.interface == 'torch':
-            params_tmp = self.init_params_torch.detach().numpy()
-            theta_tmp = self.theta.detach().numpy()
-        elif self.interface == 'pennylane':
-            params_tmp = self.init_params.numpy()
-            theta_tmp = self.theta.numpy()
-        to_save = {'symmetric': self.symmetric, 'accuracy': self.confusion_matrix,'execution time': exec_time, 'steps': self.steps, 'stepsize': self.stepsize, 'design': self.design, 'interface': self.interface, 'cost function': self.gd_cost, 'sample size': self.sample_size, \
-        'initial parameters': params_tmp, 'sampled games': self.games_sample.numpy(), 'theta': theta_tmp}
-        if self.epochs:
-            to_save['epoch cost'] = self.epoch_cost_function
-            to_save['epoch accuracy'] = self.epoch_accuracy
-            to_save['epoch batch'] = self.batch
-            to_save['epoch total accuracy'] = self.epoch_total_accuracy
+        params_tmp = self.init_params_torch.detach().numpy()
+        theta_tmp = self.theta.detach().numpy()
 
-        #dd.io.save(name + '.h5', to_save)
-        print('Saving results as {}.npy'.format(name))
+        to_save = {'symmetric': self.symmetric, 'epochs': self.epochs, 'symmetrystring': self.symmetrystring, 'controlstring': self.controlstring ,'accuracy': self.confusion_matrix,'execution_time': exec_time, 'steps': self.steps, 'stepsize': self.stepsize, 'design': self.design, 'interface': self.interface, 'cost_function': self.gd_cost, 'sample_size': self.sample_size, \
+        'initial_parameters': params_tmp, 'theta': theta_tmp, }
+        if self.epochs:
+            to_save['epoch_cost'] = self.epoch_cost_function
+            to_save['epoch_accuracy'] = self.epoch_accuracy
+            to_save['epoch_batch'] = self.batch
+            to_save['epoch_total accuracy'] = self.epoch_total_accuracy
+        else:
+            to_save['batch'] = self.batch
+            to_save['training_accuracy'] = self.training_accuracy
+            to_save['total_accuracy'] = self.total_accuracy
+            
+        print('Saving results as {}.h5'.format(name))
         try:
             #np.save('output/'+name, to_save)
-            np.save(name, to_save)
+            #np.save(name, to_save)
+            dd.io.save(name + '.h5', to_save)
         except FileNotFoundError:
             os.makedirs(os.getcwd()+'/output/'+name[::-1].split('/', 1)[1][::-1])
-            np.save('output/'+name, to_save)
-
-# %%
-# %%
+            #np.save('output/'+name, to_save)
+            dd.io.save('output/' + name + '.h5', to_save)
